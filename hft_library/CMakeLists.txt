@@ -1,0 +1,2 @@
+add_subdirectory(third_party/TinkoffInvestSDK)
+add_subdirectory(src)

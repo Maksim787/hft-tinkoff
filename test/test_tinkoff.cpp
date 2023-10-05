@@ -1,9 +1,9 @@
 #include <config.h>
 #include <constants.h>
 
-#include "investapiclient.h"
-#include "marketdatastreamservice.h"
-#include "ordersstreamservice.h"
+#include <investapiclient.h>
+#include <marketdatastreamservice.h>
+#include <ordersstreamservice.h>
 
 void marketStreamCallBack(ServiceReply reply) {
     std::cout << reply.ptr()->DebugString() << std::endl;
@@ -11,7 +11,9 @@ void marketStreamCallBack(ServiceReply reply) {
 
 int main() {
     auto config = read_config();
-    InvestApiClient client(endpoint, config["token"].as<std::string>());
+    std::cout << "Create client" << std::endl;
+    InvestApiClient client(ENDPOINT, config["runner"]["token"].as<std::string>());
+    std::cout << "Create client: success" << std::endl;
 
     //get references to MarketDataStream and OrdersStream services
     auto marketdata = std::dynamic_pointer_cast<MarketDataStream>(client.service("marketdatastream"));
@@ -25,6 +27,7 @@ int main() {
 
     //subscribe to your transactions
     orders->TradesStreamAsync({""}, marketStreamCallBack);
+    std::cout << "Reached final point" << std::endl;
 
     return 0;
 }
