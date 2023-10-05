@@ -1,6 +1,7 @@
 #pragma once
 
 #include <constants.h>
+#include <connector/utils.h>
 
 #include <investapiclient.h>
 #include <ordersstreamservice.h>
@@ -14,14 +15,14 @@ private:
     // Client
     InvestApiClient& m_client;
     // Instrument
-    std::string m_figi;
+    const InstrumentInfo& m_instrument;
     // OrdersStream
     std::shared_ptr<OrdersStream> m_orders_stream;
     // Readiness
     bool m_is_order_stream_ready = false;
 
 public:
-    UserConnector(Runner& runner, const ConfigType& config, InvestApiClient& client);
+    UserConnector(Runner& runner, const ConfigType& config, InvestApiClient& client, const InstrumentInfo& instrument);
 
 private:
     // Methods for Runner

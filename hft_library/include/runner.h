@@ -3,11 +3,15 @@
 #include <config.h>
 #include <connector/market.h>
 #include <connector/user.h>
+#include <connector/utils.h>
 
 class Runner {
 private:
     // Client for connectors
     InvestApiClient m_client;
+
+    // Instrument
+    InstrumentInfo m_instrument;
 
     // Connectors
     MarketConnector m_mkt;

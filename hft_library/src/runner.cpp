@@ -4,10 +4,13 @@
 Runner::Runner(const ConfigType& config)
         :
         m_client(ENDPOINT, config["runner"]["token"].as<std::string>()),
-        m_mkt(*this, config, m_client),
-        m_usr(*this, config, m_client) {
-
-}
+        m_instrument(
+                config["runner"]["figi"].as<std::string>(),
+                config["runner"]["lot_size"].as<int>(),
+                config["runner"]["px_step"].as<double>()
+        ),
+        m_mkt(*this, config, m_client, m_instrument),
+        m_usr(*this, config, m_client, m_instrument) {}
 
 void Runner::Start() {
     m_mkt.Start();

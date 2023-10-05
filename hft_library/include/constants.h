@@ -8,3 +8,4 @@ using ConfigType = YAML::Node;
 
 const std::string ENDPOINT = "invest-public-api.tinkoff.ru:443";
 const std::string CONFIG_DIRECTORY = "private/config.yaml";
+const int MAX_DEPTH = 50;
