@@ -6,6 +6,7 @@
 
 using ConfigType = YAML::Node;
 
-const std::string ENDPOINT = "invest-public-api.tinkoff.ru:443";
-const std::string CONFIG_DIRECTORY = "private/config.yaml";
-const int MAX_DEPTH = 50;
+constexpr const char* ENDPOINT = "invest-public-api.tinkoff.ru:443";
+constexpr const char* CONFIG_DIRECTORY = "private/config.yaml";
+constexpr int MAX_DEPTH = 50;
+constexpr static int NUMBER_OF_SPACES_PER_NUMBER = 10;

@@ -2,6 +2,7 @@ add_library(
         hft_library
         runner.cpp
         config.cpp
+        strategy.cpp
         connector/market.cpp
         connector/user.cpp
         connector/utils.cpp

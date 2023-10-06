@@ -1,17 +1,23 @@
 #pragma once
 
-#include <config.h>
 #include <connector/market.h>
 #include <connector/user.h>
 #include <connector/utils.h>
+#include <strategy.h>
+#include <config.h>
+
+#include <functional>
 
 class Runner {
 private:
+    // Config
+    ConfigType m_config;
+
     // Client for connectors
     InvestApiClient m_client;
 
     // Instrument
-    InstrumentInfo m_instrument;
+    Instrument m_instrument;
 
     // Connectors
     MarketConnector m_mkt;
@@ -21,10 +27,25 @@ private:
     bool m_is_mkt_ready = false;
     bool m_is_usr_ready = false;
 
-public:
-    Runner(const ConfigType& config);
+    // Strategy
+    std::shared_ptr<Strategy> m_strategy;
 
+public:
+    using StrategyGetter = std::function<std::shared_ptr<Strategy>(Runner&)>;
+
+    Runner(const ConfigType& config, const StrategyGetter& strategy_getter);
+
+    // Start all connectors
     void Start();
+
+    // Getters
+    const ConfigType& GetConfig() const;
+
+    const Instrument& GetInstrument() const;
+
+    MarketConnector& GetMarketConnector();
+
+    UserConnector& GetUserConnector();
 
 private:
     friend class MarketConnector;

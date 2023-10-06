@@ -1,30 +1,83 @@
 #include <connector/market.h>
-#include <connector/utils.h>
 #include <runner.h>
 
 #include <iostream>
 
-MarketOrderBook::MarketOrderBook(const InstrumentInfo& instrument, int depth)
+MarketOrderBook::MarketOrderBook(const Instrument& instrument, int depth)
         :
+        bid(depth),
+        ask(depth),
         m_instrument(instrument),
         depth(depth) {
     assert(depth >= 1);
     assert(depth <= MAX_DEPTH);
 }
 
-void MarketOrderBook::Update(bool is_bid, double* px, int* qty) {
-    // TODO: Add OrderBook difference computation
-    OneSideMarketOrderBook order_book = is_bid ? bid : ask;
+template <bool IsBidParameter>
+OneSideMarketOrderBook<IsBidParameter>::OneSideMarketOrderBook(int depth) : depth(depth) {}
+
+void print_n_characters(char c, int n) {
+    for (int i = 0; i < n; ++i) {
+        std::cout << c;
+    }
+}
+
+template <bool IsBidParameter>
+constexpr bool OneSideMarketOrderBook<IsBidParameter>::IsBid() { return IsBidParameter; }
+
+void MarketOrderBook::Print() const {
+    constexpr int TOTAL_NUMBER_OF_SPACES_IN_LINE = 4 * NUMBER_OF_SPACES_PER_NUMBER + 3 * 2 + 2;
+    print_n_characters('=', TOTAL_NUMBER_OF_SPACES_IN_LINE);
+    std::cout << std::endl;
+    print_n_characters(' ', NUMBER_OF_SPACES_PER_NUMBER - 1);
+    std::cout << "Bids";
+    print_n_characters(' ', NUMBER_OF_SPACES_PER_NUMBER * 2 + 1);
+    std::cout << "Asks" << std::endl;
     for (int i = 0; i < depth; ++i) {
-        order_book.px[i] = std::round(px[i] / m_instrument.px_step);
-        if (is_bid) {
-            order_book.px[i] *= -1;
-        }
+        std::cout << '[' << std::setw(NUMBER_OF_SPACES_PER_NUMBER)
+                  << bid.px[i] << ' ' << std::setw(NUMBER_OF_SPACES_PER_NUMBER)
+                  << bid.qty[i] << "]  ";
+        std::cout << '[' << std::setw(NUMBER_OF_SPACES_PER_NUMBER)
+                  << ask.px[i] << ' ' << std::setw(NUMBER_OF_SPACES_PER_NUMBER)
+                  << ask.qty[i] << ']' << std::endl;
+    }
+    print_n_characters('=', TOTAL_NUMBER_OF_SPACES_IN_LINE);
+    std::cout << std::endl;
+}
+
+template <bool IsBid>
+OneSideMarketOrderBook<IsBid>& MarketOrderBook::GetOneSideOrderBook() {
+    if constexpr (IsBid) {
+        return bid;
+    } else {
+        return ask;
+    }
+}
+
+template <bool IsBid>
+void MarketOrderBook::Update(const double* px, const int* qty) {
+    // TODO: Add OrderBook difference computation
+    OneSideMarketOrderBook<IsBid>& order_book = GetOneSideOrderBook<IsBid>();
+    for (int i = 0; i < depth; ++i) {
+        order_book.px[i] = static_cast<int>(std::round(px[i] / m_instrument.px_step));
         order_book.qty[i] = qty[i]; // already in lots
     }
 }
 
-Trades::Trades(InstrumentInfo const& instrument) : m_instrument(instrument) {}
+Trades::Trades(Instrument const& instrument) : m_instrument(instrument) {}
+
+void Trades::Print() const {
+    if (!has_trade) {
+        std::cout << "No trades yet" << std::endl;
+        return;
+    }
+    std::cout << "Trade: "
+              << last_trade.direction << "  "
+              << '['
+              << std::setw(NUMBER_OF_SPACES_PER_NUMBER) << last_trade.px << "  "
+              << std::setw(NUMBER_OF_SPACES_PER_NUMBER) << last_trade.qty
+              << ']' << std::endl;
+}
 
 void Trades::Update(Direction direction, double px, int qty) {
     this->has_trade = true;
@@ -35,13 +88,17 @@ void Trades::Update(Direction direction, double px, int qty) {
     };
 }
 
-MarketConnector::MarketConnector(Runner& runner, const ConfigType& config, InvestApiClient& client, const InstrumentInfo& instrument)
+MarketConnector::MarketConnector(Runner& runner, const ConfigType& config, InvestApiClient& client, const Instrument& instrument)
         :
         m_runner(runner),
         m_client(client),
         m_instrument(instrument),
         m_order_book(instrument, config["market"]["depth"].as<int>()),
         m_trades(instrument) {}
+
+const MarketOrderBook& MarketConnector::GetOrderBook() const { return m_order_book; }
+
+const Trades& MarketConnector::GetTrades() const { return m_trades; }
 
 void MarketConnector::Start() {
     std::cout << "Start MarketConnector" << std::endl;
@@ -69,10 +126,10 @@ void MarketConnector::Start() {
 
 void MarketConnector::OrderBookStreamCallBack(ServiceReply reply) {
     CheckReply(reply);
-    // Process Start of subscription
     auto response = dynamic_pointer_cast<MarketDataResponse>(reply.ptr());
     assert(response);
     if (response->has_subscribe_order_book_response()) {
+        // Process Start of subscription
         const google::protobuf::RepeatedPtrField<OrderBookSubscription>& subscriptions = response->subscribe_order_book_response().order_book_subscriptions();
         assert(subscriptions.size() == 1);
         assert(subscriptions[0].subscription_status() == SubscriptionStatus::SUBSCRIPTION_STATUS_SUCCESS);
@@ -81,10 +138,8 @@ void MarketConnector::OrderBookStreamCallBack(ServiceReply reply) {
             m_is_order_book_stream_ready = true;
             if (this->IsReady()) m_runner.OnMarketConnectorReady();
         }
-        return;
-    }
-    // Process subscription message
-    if (response->has_orderbook()) {
+    } else if (response->has_orderbook()) {
+        // Process subscription message
         const OrderBook& order_book = response->orderbook();
         assert(order_book.depth() == m_order_book.depth);
         assert(order_book.figi() == m_instrument.figi);
@@ -95,23 +150,25 @@ void MarketConnector::OrderBookStreamCallBack(ServiceReply reply) {
         int qty[MAX_DEPTH];
 
         ParseLevels(order_book.bids(), px, qty);
-        m_order_book.Update(true, px, qty);
+        m_order_book.Update<true>(px, qty);
 
         ParseLevels(order_book.asks(), px, qty);
-        m_order_book.Update(false, px, qty);
+        m_order_book.Update<false>(px, qty);
 
-        return;
+        // Notify strategy
+        m_strategy->OnOrderBookUpdate();
+    } else {
+        // Process ping
+        assert(response->has_ping());
     }
-    // Process ping
-    assert(response->has_ping());
 }
 
 void MarketConnector::TradeStreamCallBack(ServiceReply reply) {
     CheckReply(reply);
-    // Process Start of subscription
     auto response = dynamic_pointer_cast<MarketDataResponse>(reply.ptr());
     assert(response);
     if (response->has_subscribe_trades_response()) {
+        // Process Start of subscription
         const google::protobuf::RepeatedPtrField<TradeSubscription>& subscriptions = response->subscribe_trades_response().trade_subscriptions();
         assert(subscriptions.size() == 1);
         assert(subscriptions[0].subscription_status() == SubscriptionStatus::SUBSCRIPTION_STATUS_SUCCESS);
@@ -120,10 +177,8 @@ void MarketConnector::TradeStreamCallBack(ServiceReply reply) {
             m_is_trade_stream_ready = true;
             if (this->IsReady()) m_runner.OnMarketConnectorReady();
         }
-        return;
-    }
-    // Process subscription message
-    if (response->has_trade()) {
+    } else if (response->has_trade()) {
+        // Process subscription message
         const Trade& trade = response->trade();
         assert(trade.figi() == m_instrument.figi);
         // TODO: parse time
@@ -133,23 +188,25 @@ void MarketConnector::TradeStreamCallBack(ServiceReply reply) {
         // Sell: 1 -> -1
         int direction = trade.direction();
         assert(direction == 1 || direction == 2);
-        m_trades.Update(direction == 2 ? Direction::Buy : Direction::Sell, QuotationToDouble(trade.price()), trade.quantity());
-        return;
+        m_trades.Update(direction == 2 ? Direction::Buy : Direction::Sell, QuotationToDouble(trade.price()), static_cast<int>(trade.quantity()));
+
+        // Notify strategy
+        m_strategy->OnTradesUpdate();
+    } else {
+        // Process ping
+        assert(response->has_ping());
     }
-    // Process ping
-    assert(response->has_ping());
 }
 
-bool MarketConnector::IsReady() {
+bool MarketConnector::IsReady() const {
     return m_is_order_book_stream_ready & m_is_trade_stream_ready;
 }
 
-void MarketConnector::ParseLevels(const google::protobuf::RepeatedPtrField<Order>& orders, double* px, int* qty) {
+void MarketConnector::ParseLevels(const google::protobuf::RepeatedPtrField<Order>& orders, double* px, int* qty) const {
     assert(orders.size() == m_order_book.depth);
     for (int i = 0; i < m_order_book.depth; ++i) {
         const Order& order = orders[i];
         px[i] = QuotationToDouble(order.price());
-        qty[i] = order.quantity();
+        qty[i] = static_cast<int>(order.quantity());
     }
 }
-

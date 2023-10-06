@@ -4,7 +4,7 @@
 
 #include <iostream>
 
-UserConnector::UserConnector(Runner& runner, const ConfigType& config, InvestApiClient& client, const InstrumentInfo& instrument)
+UserConnector::UserConnector(Runner& runner, const ConfigType& config, InvestApiClient& client, const Instrument& instrument)
         :
         m_runner(runner),
         m_client(client),

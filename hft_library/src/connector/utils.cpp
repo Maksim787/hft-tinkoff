@@ -1,12 +1,26 @@
 #include <connector/utils.h>
 
-InstrumentInfo::InstrumentInfo(const std::string& figi, int lot_size, double px_step)
+Instrument::Instrument(const std::string& figi, int lot_size, double px_step)
         :
         figi(figi),
         lot_size(lot_size),
         px_step(px_step) {
     assert(lot_size > 0);
     assert(px_step > 0);
+}
+
+std::ostream& operator<<(std::ostream& os, const Direction& direction) {
+    switch (direction) {
+        case Direction::Buy:
+            os << "Buy";
+            break;
+        case Direction::Sell:
+            os << "Sell";
+            break;
+        default:
+            assert(false);
+    }
+    return os;
 }
 
 void CheckReply(const ServiceReply& reply) {

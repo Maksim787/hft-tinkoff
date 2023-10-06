@@ -8,46 +8,58 @@
 
 class Runner;
 
+class Strategy;
+
 class MarketConnector;
 
+class MarketOrderBook;
+
+template <bool IsBidParameter>
 class OneSideMarketOrderBook {
 public:
-    // 1.
-    // bid_px < 0
-    // ask_px > 0
-    // 2.
-    // A < B => A is closer to mid-price
-    // 3.
     // bid[0], ask[0] => best bid/ask
-    // 4.
     // px = real_px / px_step
     // qty = real_qty / lot_size
-    int px[MAX_DEPTH];
-    int qty[MAX_DEPTH];
+    int px[MAX_DEPTH] = {0};
+    int qty[MAX_DEPTH] = {0};
+    int depth;
+
+    OneSideMarketOrderBook(int depth);
+
+    constexpr bool IsBid();
+
+private:
+    friend MarketOrderBook;
 };
 
 class MarketOrderBook {
 public:
+    OneSideMarketOrderBook<true> bid;
+    OneSideMarketOrderBook<false> ask;
+
     int depth;
 
-    OneSideMarketOrderBook bid;
-    OneSideMarketOrderBook ask;
-
 private:
-    const InstrumentInfo& m_instrument;
+    const Instrument& m_instrument;
 
 public:
-    MarketOrderBook(const InstrumentInfo& instrument, int depth);
+    MarketOrderBook(const Instrument& instrument, int depth);
+
+    void Print() const;
 
 private:
     friend class MarketConnector;
 
-    void Update(bool is_bid, double* px, int* qty);
+    template <bool IsBid>
+    OneSideMarketOrderBook<IsBid>& GetOneSideOrderBook();
+
+    template <bool IsBid>
+    void Update(const double* px, const int* qty);
 };
 
 struct MarketTrade {
     Direction direction;
-    int px; // real_px / px_step
+    int px; // real_px / px_step; > 0 if direction == Buy; < 0 if direction == Sell
     int qty; // in lots
 };
 
@@ -58,10 +70,15 @@ public:
     MarketTrade last_trade = {Direction::Buy, 0, 0};
 
 private:
-    const InstrumentInfo& m_instrument;
+    const Instrument& m_instrument;
 
 public:
-    Trades(const InstrumentInfo& instrument);
+    Trades(const Instrument& instrument);
+
+    void Print() const;
+
+private:
+    friend class MarketConnector;
 
     void Update(Direction direction, double px, int qty);
 };
@@ -70,21 +87,31 @@ class MarketConnector {
 private:
     // Runner
     Runner& m_runner;
+    // Strategy
+    std::shared_ptr<Strategy> m_strategy = nullptr;
     // Client
     InvestApiClient& m_client;
     // Instrument
-    const InstrumentInfo& m_instrument;
+    const Instrument& m_instrument;
+
     // MarketDataStream
     std::shared_ptr<MarketDataStream> m_market_data_stream;
+
     // Readiness
     bool m_is_order_book_stream_ready = false;
     bool m_is_trade_stream_ready = false;
+
     // OrderBook
     MarketOrderBook m_order_book;
     // Trades
     Trades m_trades;
 public:
-    MarketConnector(Runner& runner, const ConfigType& config, InvestApiClient& client, const InstrumentInfo& instrument);
+    MarketConnector(Runner& runner, const ConfigType& config, InvestApiClient& client, const Instrument& instrument);
+
+    // Getters
+    const MarketOrderBook& GetOrderBook() const;
+
+    const Trades& GetTrades() const;
 
 private:
     // Methods for Runner
@@ -97,7 +124,7 @@ private:
 
     void TradeStreamCallBack(ServiceReply reply);
 
-    bool IsReady();
+    [[nodiscard]] bool IsReady() const;
 
-    void ParseLevels(const google::protobuf::RepeatedPtrField<Order>& orders, double* px, int* qty);
+    void ParseLevels(const google::protobuf::RepeatedPtrField<Order>& orders, double* px, int* qty) const;
 };

@@ -1,15 +1,15 @@
 import yaml
 import tinkoff.invest as inv
 
+from utils import quotation_to_float
+
+# Config:
+TICKER = 'SBER'
+ticker_type = 'share'
+# ticker_type = 'etf'
+
 with open('../private/config.yaml') as f:
     config = yaml.safe_load(f)
-
-TICKER = "TMOS"
-
-
-def quotation_to_float(q):
-    return q.units + q.nano / 1e9
-
 
 with inv.Client(token=config['runner']['token']) as client:
     for class_code in ['SPBXM', 'TQCB', 'TQBR', 'SPBHKEX',
@@ -19,8 +19,14 @@ with inv.Client(token=config['runner']['token']) as client:
                        'TQPI', 'TQTD', 'TQTE', 'SPBRUBND',
                        'SPBKZ', 'SPBRU', 'TQRD', 'TQIY']:
         try:
-            response = client.instruments.etf_by(id_type=inv.InstrumentIdType.INSTRUMENT_ID_TYPE_TICKER, class_code=class_code, id=TICKER)
-            print(f'Found {class_code}')
+            if ticker_type == 'etf':
+                response = client.instruments.etf_by(id_type=inv.InstrumentIdType.INSTRUMENT_ID_TYPE_TICKER, class_code=class_code, id=TICKER)
+            elif ticker_type == 'share':
+                response = client.instruments.share_by(id_type=inv.InstrumentIdType.INSTRUMENT_ID_TYPE_TICKER, class_code=class_code, id=TICKER)
+            else:
+                assert False, 'Unreachable'
+            print()
+            print(f'Found {class_code=}')
             print(f'Figi: {response.instrument.figi}')
             print(f'Lot size: {response.instrument.lot}')
             print(f'Px step: {quotation_to_float(response.instrument.min_price_increment)}')
