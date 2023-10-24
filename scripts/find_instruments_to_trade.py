@@ -49,6 +49,8 @@ with inv.Client(token=config['runner']['token']) as client:
 
     print('Get accounts')
     accounts = client.users.get_accounts().accounts
+    for account in accounts:
+        print(f'{account.name}: {account.id}: {account}')
     main_account = next(filter(lambda x: x.name == main_account_name, accounts))
     account_id = main_account.id
 

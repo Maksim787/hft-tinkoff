@@ -2,20 +2,29 @@
 #include <runner.h>
 #include <strategy.h>
 
+
 class ExampleStrategy : public Strategy {
 public:
     explicit ExampleStrategy(Runner& runner) : Strategy(runner) {}
 
 private:
     void OnConnectorsReadiness() override {
-        std::cout << "Strategy got notification that all connectors are ready" << std::endl;
+        std::cout << "Strategy: all connectors are ready" << std::endl;
     }
 
     void OnOrderBookUpdate() override {
         m_order_book.Print();
     }
+
     void OnTradesUpdate() override {
         m_trades.Print();
+    }
+
+    void OnOurTrade(const LimitOrder& order, int executed_qty) override {
+        std::cout << "Execution: " << executed_qty << "\n";
+        order.Print();
+        std::cout << "New positions:\n";
+        m_positions.Print();
     }
 };
 

@@ -8,8 +8,6 @@
 
 class Runner;
 
-class Strategy;
-
 class MarketConnector;
 
 class MarketOrderBook;
@@ -59,7 +57,7 @@ private:
 
 struct MarketTrade {
     Direction direction;
-    int px; // real_px / px_step; > 0 if direction == Buy; < 0 if direction == Sell
+    int px; // real_px / px_step
     int qty; // in lots
 };
 
@@ -87,8 +85,6 @@ class MarketConnector {
 private:
     // Runner
     Runner& m_runner;
-    // Strategy
-    std::shared_ptr<Strategy> m_strategy = nullptr;
     // Client
     InvestApiClient& m_client;
     // Instrument

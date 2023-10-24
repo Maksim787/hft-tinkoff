@@ -45,21 +45,21 @@ void MarketOrderBook::Print() const {
     std::cout << std::endl;
 }
 
-template <bool IsBid>
-OneSideMarketOrderBook<IsBid>& MarketOrderBook::GetOneSideOrderBook() {
-    if constexpr (IsBid) {
+template <bool IsBidParameter>
+OneSideMarketOrderBook<IsBidParameter>& MarketOrderBook::GetOneSideOrderBook() {
+    if constexpr (IsBidParameter) {
         return bid;
     } else {
         return ask;
     }
 }
 
-template <bool IsBid>
+template <bool IsBidParameter>
 void MarketOrderBook::Update(const double* px, const int* qty) {
     // TODO: Add OrderBook difference computation
-    OneSideMarketOrderBook<IsBid>& order_book = GetOneSideOrderBook<IsBid>();
+    OneSideMarketOrderBook<IsBidParameter>& order_book = GetOneSideOrderBook<IsBidParameter>();
     for (int i = 0; i < depth; ++i) {
-        order_book.px[i] = static_cast<int>(std::round(px[i] / m_instrument.px_step));
+        order_book.px[i] = m_instrument.DoublePxToInt(px[i]);
         order_book.qty[i] = qty[i]; // already in lots
     }
 }
@@ -83,7 +83,7 @@ void Trades::Update(Direction direction, double px, int qty) {
     this->has_trade = true;
     this->last_trade = MarketTrade {
             .direction = direction,
-            .px = static_cast<int>(std::round(px / m_instrument.px_step)),
+            .px = m_instrument.DoublePxToInt(px),
             .qty = qty
     };
 }
@@ -156,7 +156,7 @@ void MarketConnector::OrderBookStreamCallBack(ServiceReply reply) {
         m_order_book.Update<false>(px, qty);
 
         // Notify strategy
-        m_strategy->OnOrderBookUpdate();
+        m_runner.OnOrderBookUpdate();
     } else {
         // Process ping
         assert(response->has_ping());
@@ -184,14 +184,18 @@ void MarketConnector::TradeStreamCallBack(ServiceReply reply) {
         // TODO: parse time
 
         // Parse Trade
-        // Buy: 2 -> 1
-        // Sell: 1 -> -1
-        int direction = trade.direction();
+        // Buy: 1
+        // Sell: 2
+        const int direction = trade.direction();
         assert(direction == 1 || direction == 2);
-        m_trades.Update(direction == 2 ? Direction::Buy : Direction::Sell, QuotationToDouble(trade.price()), static_cast<int>(trade.quantity()));
+        m_trades.Update(
+                direction == 1 ? Direction::Buy : Direction::Sell,
+                QuotationToDouble(trade.price()),
+                static_cast<int>(trade.quantity())
+        );
 
         // Notify strategy
-        m_strategy->OnTradesUpdate();
+        m_runner.OnTradesUpdate();
     } else {
         // Process ping
         assert(response->has_ping());

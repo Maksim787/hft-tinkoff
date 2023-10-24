@@ -1,4 +1,7 @@
+#include <iostream>
+
 #include <config.h>
+
 
 int main() {
     auto config = read_config();

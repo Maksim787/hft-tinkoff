@@ -53,10 +53,16 @@ private:
     // Methods for MarketConnector
     void OnMarketConnectorReady();
 
+    void OnOrderBookUpdate();
+
+    void OnTradesUpdate();
+
     friend class UserConnector;
 
     // Methods for UserConnector
     void OnUserConnectorReady();
+
+    void OnOurTrade(const LimitOrder& order, int executed_qty);
 
     // Methods for Runner
     bool IsReady();
