@@ -1,10 +1,13 @@
 #pragma once
 
-#include <constants.h>
-#include <connector/utils.h>
+#include <spdlog/spdlog.h>
+#include <spdlog/fmt/ostr.h>
 
 #include <investapiclient.h>
 #include <marketdatastreamservice.h>
+
+#include <constants.h>
+#include <connector/utils.h>
 
 class Runner;
 
@@ -24,7 +27,18 @@ public:
 
     OneSideMarketOrderBook(int depth);
 
-    constexpr bool IsBid();
+    constexpr static bool IsBid() {
+        return IsBidParameter;
+    }
+
+    // 1 if IsBid; -1 if IsAsk
+    constexpr static int Sign() {
+        if constexpr (IsBidParameter) {
+            return 1;
+        } else {
+            return -1;
+        }
+    }
 
 private:
     friend MarketOrderBook;
@@ -43,8 +57,6 @@ private:
 public:
     MarketOrderBook(const Instrument& instrument, int depth);
 
-    void Print() const;
-
 private:
     friend class MarketConnector;
 
@@ -52,8 +64,9 @@ private:
     OneSideMarketOrderBook<IsBid>& GetOneSideOrderBook();
 
     template <bool IsBid>
-    void Update(const double* px, const int* qty);
+    void Update(const int* px, const int* qty);
 };
+
 
 struct MarketTrade {
     Direction direction;
@@ -73,13 +86,16 @@ private:
 public:
     Trades(const Instrument& instrument);
 
-    void Print() const;
-
 private:
     friend class MarketConnector;
 
-    void Update(Direction direction, double px, int qty);
+    void Update(Direction direction, int px, int qty);
 };
+
+std::ostream& operator<<(std::ostream& os, const Trades& trades);
+
+std::ostream& operator<<(std::ostream& os, const MarketOrderBook& ob);
+
 
 class MarketConnector {
 private:
@@ -87,6 +103,8 @@ private:
     Runner& m_runner;
     // Client
     InvestApiClient& m_client;
+    // Logger
+    std::shared_ptr<spdlog::logger> m_logger;
     // Instrument
     const Instrument& m_instrument;
 
@@ -102,7 +120,7 @@ private:
     // Trades
     Trades m_trades;
 public:
-    MarketConnector(Runner& runner, const ConfigType& config, InvestApiClient& client, const Instrument& instrument);
+    MarketConnector(Runner& runner, const ConfigType& config);
 
     // Getters
     const MarketOrderBook& GetOrderBook() const;
@@ -116,11 +134,11 @@ private:
     void Start();
 
     // Methods for MarketConnector
-    void OrderBookStreamCallBack(ServiceReply reply);
+    void OrderBookStreamCallBack(MarketDataResponse* response);
 
-    void TradeStreamCallBack(ServiceReply reply);
+    void TradeStreamCallBack(MarketDataResponse* response);
 
     [[nodiscard]] bool IsReady() const;
 
-    void ParseLevels(const google::protobuf::RepeatedPtrField<Order>& orders, double* px, int* qty) const;
+    void ParseLevels(const google::protobuf::RepeatedPtrField<Order>& orders, int* px, int* qty) const;
 };

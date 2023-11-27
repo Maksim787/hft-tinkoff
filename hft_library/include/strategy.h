@@ -1,8 +1,12 @@
 #pragma once
 
+#include <spdlog/spdlog.h>
+#include <spdlog/fmt/ostr.h>
+
 #include <config.h>
-#include <connector/market.h>
+#include <connector/utils.h>
 #include <connector/user.h>
+#include <connector/market.h>
 
 class Runner;
 
@@ -10,8 +14,7 @@ class Strategy {
 protected:
     // Runner and connectors
     Runner& m_runner;
-    MarketConnector& m_mkt;
-    UserConnector& m_usr;
+    std::shared_ptr<spdlog::logger> m_logger;
 
     // Config and instrument
     const Instrument& m_instrument;
@@ -30,10 +33,6 @@ public:
 private:
     friend class Runner;
 
-    friend class MarketConnector;
-
-    friend class UserConnector;
-
     // Runner methods
     virtual void OnConnectorsReadiness() = 0;
 
@@ -42,6 +41,6 @@ private:
 
     virtual void OnTradesUpdate() = 0;
 
-    // user Connector methods
+    // User Connector methods
     virtual void OnOurTrade(const LimitOrder& order, int executed_qty) = 0;
 };

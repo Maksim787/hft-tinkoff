@@ -1,0 +1,9 @@
+cmake-build-debug
+
+private/
+log/
+
+scripts/venv/
+
+.idea
+__pycache__

@@ -35,6 +35,8 @@ class PossiblePosition:
 
 
 def filter_condition(share: inv.Share):
+    if share.ticker in ['TCSG', 'TMOS']:
+        return True
     return share.country_of_risk == 'RU' and share.currency == 'rub' and not share.for_qual_investor_flag and not share.otc_flag and share.short_enabled_flag and share.buy_available_flag and share.sell_available_flag
 
 
