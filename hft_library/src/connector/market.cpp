@@ -30,11 +30,11 @@ std::ostream& operator<<(std::ostream& os, const MarketOrderBook& ob) {
     os << "Asks\n";
     for (int i = 0; i < ob.depth; ++i) {
         os << '[' << std::setw(NUMBER_OF_SPACES_PER_NUMBER)
-                  << ob.bid.px[i] << ' ' << std::setw(NUMBER_OF_SPACES_PER_NUMBER)
-                  << ob.bid.qty[i] << "]  ";
+           << ob.bid.px[i] << ' ' << std::setw(NUMBER_OF_SPACES_PER_NUMBER)
+           << ob.bid.qty[i] << "]  ";
         os << '[' << std::setw(NUMBER_OF_SPACES_PER_NUMBER)
-                  << ob.ask.px[i] << ' ' << std::setw(NUMBER_OF_SPACES_PER_NUMBER)
-                  << ob.ask.qty[i] << "]\n";
+           << ob.ask.px[i] << ' ' << std::setw(NUMBER_OF_SPACES_PER_NUMBER)
+           << ob.ask.qty[i] << "]\n";
     }
     print_n_characters(os, '=', TOTAL_NUMBER_OF_SPACES_IN_LINE);
     return os;
@@ -129,6 +129,7 @@ void MarketConnector::OrderBookStreamCallBack(MarketDataResponse* response) {
         assert(subscriptions[0].subscription_status() == SubscriptionStatus::SUBSCRIPTION_STATUS_SUCCESS);
         m_logger->info("OrderBookStream subscribe: success");
     } else if (response->has_orderbook()) {
+        LockGuard lock = m_runner.GetEventLock();
         // Process subscription message
         const OrderBook& order_book = response->orderbook();
         assert(order_book.depth() == m_order_book.depth);
@@ -151,7 +152,11 @@ void MarketConnector::OrderBookStreamCallBack(MarketDataResponse* response) {
             if (this->IsReady()) m_runner.OnMarketConnectorReady();
         } else {
             // Notify strategy
-            m_runner.OnOrderBookUpdate();
+            if (lock.NotifyNow()) {
+                m_runner.OnOrderBookUpdate();
+            } else {
+                m_logger->warn("Skip OrderBook notification: {} events pending", lock.GetNumberEventsPending());
+            }
         }
     } else {
         // Process ping
@@ -170,6 +175,7 @@ void MarketConnector::TradeStreamCallBack(MarketDataResponse* response) {
         m_is_trade_stream_ready = true;
         if (this->IsReady()) m_runner.OnMarketConnectorReady();
     } else if (response->has_trade()) {
+        LockGuard lock = m_runner.GetEventLock();
         // Process subscription message
         const Trade& trade = response->trade();
         assert(trade.figi() == m_instrument.figi);
@@ -185,7 +191,11 @@ void MarketConnector::TradeStreamCallBack(MarketDataResponse* response) {
         );
 
         // Notify strategy
-        m_runner.OnTradesUpdate();
+        if (lock.NotifyNow()) {
+            m_runner.OnTradesUpdate();
+        } else {
+            m_logger->warn("Skip Trades notification: {} events pending", lock.GetNumberEventsPending());
+        }
     } else {
         // Process ping
         assert(response->has_ping());

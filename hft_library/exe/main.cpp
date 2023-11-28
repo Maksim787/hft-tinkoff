@@ -48,8 +48,14 @@ private:
             }
         }
         // Post correct order if possible
-        if ((direction == Direction::Buy && m_positions.money >= target_px) || (direction == Direction::Sell && m_positions.qty >= place_qty)) {
-            m_runner.PostOrder(target_px, place_qty, direction);
+        try {
+            if (direction == Direction::Buy && m_positions.money >= target_px) {
+                m_runner.PostOrder(target_px, std::min(place_qty, m_positions.money / target_px), direction);
+            } else if (direction == Direction::Sell && m_positions.qty >= 1) {
+                m_runner.PostOrder(target_px, std::min(place_qty, m_positions.qty), direction);
+            }
+        } catch (const ServiceReply& reply) {
+            m_logger->warn("Could not post the order (possibly prohibited short): {} qty={}, px={}", direction, place_qty, target_px);
         }
     }
 
@@ -82,7 +88,7 @@ private:
 
     void OnConnectorsReadiness() override {
         m_logger->info("All connectors are ready");
-        m_logger->info("OrderBook:\n{}\nTrades:{}\nPositions:{}", m_order_book, m_trades, m_positions);
+        m_logger->info("OrderBook:\n{}\nTrades:{}\nPositions:\n{}", m_order_book, m_trades, m_positions);
         // Post initial orders
         PostOrders();
     }

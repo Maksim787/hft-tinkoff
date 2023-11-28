@@ -36,7 +36,8 @@ std::ostream& operator<<(std::ostream& os, Direction direction);
 
 const std::map<int, std::string> ERROR_DEFINITION = {
         {30042, "not enough assets for a margin trade"},
-        {30059, "cancel order error: %s"}
+        {30059, "cancel order error: %s"},
+        {30079, "instrument is not available for trading"}
 };
 
 template <typename Type>

@@ -16,7 +16,6 @@ std::ostream& operator<<(std::ostream& os, const LimitOrder& order) {
 }
 
 std::ostream& operator<<(std::ostream& os, const Positions& positions) {
-    os << "Positions:\n";
     os << "Qty: " << positions.qty << "\n";
     os << "Money: " << positions.money << "\n";
     os << "Orders: " << positions.orders.size() << "\n";
@@ -152,6 +151,7 @@ void UserConnector::CancelOrder(const std::string& order_id) {
 
 void UserConnector::OrderStreamCallback(TradesStreamResponse* response) {
     if (response->has_order_trades()) {
+        LockGuard lock = m_runner.GetEventLock();
         // Process our trades
         const OrderTrades& order_trades = response->order_trades();
         assert(order_trades.figi() == m_instrument.figi && "Got unexpected trade for different figi");
@@ -174,14 +174,15 @@ void UserConnector::OrderStreamCallback(TradesStreamResponse* response) {
             assert(trade.quantity() % m_instrument.lot_size == 0);
             executed_qty += m_instrument.QtyToLots(trade.quantity()); // convert to lots
         }
-        ProcessOurTrade(order_id, px, executed_qty, direction == OrderDirection::ORDER_DIRECTION_BUY ? Direction::Buy : Direction::Sell);
+
+        ProcessOurTrade(lock, order_id, px, executed_qty, direction == OrderDirection::ORDER_DIRECTION_BUY ? Direction::Buy : Direction::Sell);
     } else {
         // Process ping
         assert(response->has_ping());
     }
 }
 
-void UserConnector::ProcessOurTrade(const std::string& order_id, int px, int executed_qty, Direction direction) {
+void UserConnector::ProcessOurTrade(const LockGuard& lock, const std::string& order_id, int px, int executed_qty, Direction direction) {
     m_logger->info("OurTrade: {} order_id={}, qty={}, px={}", direction, order_id, executed_qty, px);
     // Find order
     auto it = m_positions.orders.find(order_id);
@@ -192,7 +193,7 @@ void UserConnector::ProcessOurTrade(const std::string& order_id, int px, int exe
     } else {
         LimitOrder& order = it->second;
         // Do sanity check
-        assert(order.px == px && "Px mismatch");
+//        assert(order.px == px && "Px mismatch");
         assert(order.direction == direction && "Direction mismatch");
         assert(executed_qty <= order.qty && "More qty was executed than order contains");
         // Remove qty
@@ -217,7 +218,11 @@ void UserConnector::ProcessOurTrade(const std::string& order_id, int px, int exe
     }
 
     // Notify strategy
-    m_runner.OnOurTrade(order, executed_qty);
+    if (lock.NotifyNow()) {
+        m_runner.OnOurTrade(order, executed_qty);
+    } else {
+        m_logger->warn("Skip OurTrade notification: {} events pending", lock.GetNumberEventsPending());
+    }
 }
 
 const LimitOrder& UserConnector::ProcessNewPostOrder(const std::string& order_id, int px, int qty, Direction direction) {

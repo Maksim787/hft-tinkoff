@@ -9,10 +9,10 @@ Runner::Runner(const ConfigType& config, const StrategyGetter& strategy_getter)
         :
         m_config(config),
         m_file_sink(std::make_shared<spdlog::sinks::basic_file_sink_mt>(config["runner"]["log_file"].as<std::string>(), false)),
-        m_runner_logger(std::make_shared<spdlog::logger>("Runner", spdlog::sinks_init_list{m_file_sink, std::make_shared<spdlog::sinks::stdout_sink_mt>()})),
-        m_mkt_logger(std::make_shared<spdlog::logger>("Market", spdlog::sinks_init_list{m_file_sink, std::make_shared<spdlog::sinks::stdout_sink_mt>()})),
-        m_usr_logger(std::make_shared<spdlog::logger>("User", spdlog::sinks_init_list{m_file_sink, std::make_shared<spdlog::sinks::stdout_sink_mt>()})),
-        m_strategy_logger(std::make_shared<spdlog::logger>("Strategy", spdlog::sinks_init_list{m_file_sink, std::make_shared<spdlog::sinks::stdout_sink_mt>()})),
+        m_runner_logger(std::make_shared<spdlog::logger>("Runner", spdlog::sinks_init_list {m_file_sink, std::make_shared<spdlog::sinks::stdout_sink_mt>()})),
+        m_mkt_logger(std::make_shared<spdlog::logger>("Market", spdlog::sinks_init_list {m_file_sink, std::make_shared<spdlog::sinks::stdout_sink_mt>()})),
+        m_usr_logger(std::make_shared<spdlog::logger>("User", spdlog::sinks_init_list {m_file_sink, std::make_shared<spdlog::sinks::stdout_sink_mt>()})),
+        m_strategy_logger(std::make_shared<spdlog::logger>("Strategy", spdlog::sinks_init_list {m_file_sink, std::make_shared<spdlog::sinks::stdout_sink_mt>()})),
         m_client(ENDPOINT, config["runner"]["token"].as<std::string>()),
         // TODO: Get/Check instrument information in RunTime
         m_instrument(
@@ -107,4 +107,28 @@ void Runner::OnOurTrade(const LimitOrder& order, int executed_qty) {
 
 bool Runner::IsReady() {
     return m_is_mkt_ready & m_is_usr_ready;
+}
+
+LockGuard Runner::GetEventLock() {
+    return LockGuard(*this);
+}
+
+bool LockGuard::NotifyNow() const {
+    assert(m_runner.n_pending_events >= 1);
+    return m_runner.n_pending_events == 1;
+}
+
+int LockGuard::GetNumberEventsPending() const {
+    return m_runner.n_pending_events - 1;
+}
+
+LockGuard::LockGuard(Runner& runner) : m_runner(runner) {
+    assert(m_runner.n_pending_events >= 0);
+    ++m_runner.n_pending_events;
+    m_runner.m_mutex.lock();
+}
+
+LockGuard::~LockGuard() {
+    --m_runner.n_pending_events;
+    m_runner.m_mutex.unlock();
 }

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <functional>
+#include <mutex>
+
 #include <spdlog/spdlog.h>
 #include <spdlog/fmt/ostr.h>
 #include <spdlog/sinks/basic_file_sink.h>
@@ -11,6 +13,24 @@
 #include <strategy.h>
 #include <config.h>
 
+
+class Runner;
+
+// Synchronization
+class LockGuard {
+    Runner& m_runner;
+public:
+    bool NotifyNow() const;
+
+    int GetNumberEventsPending() const;
+
+    ~LockGuard();
+
+private:
+    LockGuard(Runner& runner);
+
+    friend class Runner;
+};
 
 class Runner {
 private:
@@ -29,6 +49,9 @@ private:
 
     // Instrument
     Instrument m_instrument;
+
+    std::atomic_int n_pending_events = 0;
+    std::mutex m_mutex;
 
     // Connectors
     MarketConnector m_mkt;
@@ -68,12 +91,17 @@ public:
 private:
     friend class MarketConnector;
 
+    friend class LockGuard;
+
     // Getters for MarketConnector and UserConnector
     InvestApiClient& GetClient();
 
     std::shared_ptr<spdlog::logger> GetMarketLogger();
 
     std::shared_ptr<spdlog::logger> GetUserLogger();
+
+    // Methods for synchronization
+    LockGuard GetEventLock();
 
     // Methods for MarketConnector
     void OnMarketConnectorReady();

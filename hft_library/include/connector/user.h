@@ -13,6 +13,8 @@
 
 class Runner;
 
+class LockGuard;
+
 class Strategy;
 
 class LimitOrder {
@@ -27,7 +29,7 @@ class Positions {
 public:
     std::map<std::string, LimitOrder> orders; // orders by id
     int qty = 0; // > 0 if Long; < 0 if Short
-    double money = 0; // real_money / (lot * px_step)
+    int money = 0; // real_money / (lot * px_step)
 };
 
 std::ostream& operator<<(std::ostream& os, const LimitOrder& order);
@@ -79,7 +81,7 @@ private:
     // Methods for UserConnector
     void OrderStreamCallback(TradesStreamResponse* response);
 
-    void ProcessOurTrade(const std::string& order_id, int px, int qty, Direction direction);
+    void ProcessOurTrade(const LockGuard& lock, const std::string& order_id, int px, int qty, Direction direction);
 
     const LimitOrder& ProcessNewPostOrder(const std::string& order_id, int px, int qty, Direction direction);
 
