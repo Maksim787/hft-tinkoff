@@ -57,11 +57,11 @@ private:
 public:
     MarketOrderBook(const Instrument& instrument, int depth);
 
-private:
-    friend class MarketConnector;
-
     template <bool IsBid>
     OneSideMarketOrderBook<IsBid>& GetOneSideOrderBook();
+
+private:
+    friend class MarketConnector;
 
     template <bool IsBid>
     void Update(const int* px, const int* qty);

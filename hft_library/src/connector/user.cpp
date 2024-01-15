@@ -52,8 +52,12 @@ void UserConnector::Start() {
 
     // Parse Money positions
     const auto& money_positions = positions->money();
-    assert(money_positions.size() == 1 && "Found multiple currency positions");
-    m_positions.money = m_instrument.MoneyValueToPx(money_positions[0]);
+    assert(money_positions.size() <= 1 && "Found multiple currency positions");
+    if (money_positions.empty()) {
+        m_positions.money = 0;
+    } else {
+        m_positions.money = m_instrument.MoneyValueToPx(money_positions[0]);
+    }
 
     // Parse Money blocked positions
     // TODO: add cancel orders
