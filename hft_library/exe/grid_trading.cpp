@@ -9,7 +9,7 @@ private:
     int order_size;
     int spread;
 
-    int curr_bid_px;
+    std::atomic_int curr_bid_px;
 
 public:
     explicit ExampleStrategy(Runner& runner, const ConfigType& config)
@@ -37,24 +37,23 @@ private:
         // Update curr_bid_px if necessary
         if (m_positions.money / curr_bid_px / order_size == 0) {
             // We only have the asset -> decrease the curr_bid_px
-            curr_bid_px = std::min(curr_bid_px, m_order_book.bid.px[0] - spread + 1);
+            curr_bid_px = std::min(static_cast<int>(curr_bid_px), m_order_book.bid.px[0] - spread + 1);
         }
         if (m_positions.qty / order_size == 0) {
             // We only have money -> increase the curr_bid_px
-            curr_bid_px = std::max(curr_bid_px, m_order_book.bid.px[0] - spread + 1);
+            curr_bid_px = std::max(static_cast<int>(curr_bid_px), m_order_book.bid.px[0] - spread + 1);
         }
 
         // Calculate start px for orders
-        int start_target_px = -1;
+        int start_target_px;
         if constexpr (IsBid) {
             start_target_px = curr_bid_px;
         } else {
             start_target_px = curr_bid_px + spread;
         }
-        assert(start_target_px != -1);
 
         // Calculate maximum qty to place on the side
-        int max_post_qty = 0;
+        int max_post_qty;
         if constexpr (IsBid) {
             // Place all money
             max_post_qty = std::min(m_positions.money / start_target_px / order_size, max_levels);
@@ -72,9 +71,7 @@ private:
         std::set<int> orders_px;
         std::vector<std::string> cancel_order_ids;
         for (const auto&[order_id, order]: m_positions.orders) {
-            if (order.qty == 0) {
-                continue;
-            }
+            assert(order.qty != 0);
             if (order.direction == Direction::Buy && IsBid || order.direction == Direction::Sell && !IsBid) {
                 if (order.px * sign <= finish_target_px * sign || order.px * sign > start_target_px * sign) {
                     cancel_order_ids.push_back(order_id);
@@ -96,7 +93,11 @@ private:
         Direction direction = IsBid ? Direction::Buy : Direction::Sell;
         for (int px = finish_target_px + sign; px * sign <= start_target_px * sign; px += sign) {
             if (!orders_px.contains(px)) {
-                m_runner.PostOrder(px, order_size, direction);
+                try {
+                    m_runner.PostOrder(px, order_size, direction);
+                } catch (const ServiceReply& reply) {
+                    m_logger->warn("Could not post the order (TODO: fix the cancel order)");
+                }
             }
         }
     }
@@ -115,16 +116,16 @@ private:
     }
 
     void OnOrderBookUpdate() override {
-        m_logger->trace("OrderBook update");
+        m_logger->trace("OrderBook update.\tcurr_bid_px={}", curr_bid_px);
         PostOrders();
     }
 
     void OnTradesUpdate() override {
-        m_logger->trace("{}", m_trades);
+        m_logger->trace("{}.\tcurr_bid_px={}", m_trades, curr_bid_px);
         PostOrders();
     }
 
-    void OnOurTrade(const LimitOrder& order, int executed_qty) override {
+    void OnOurTradeAsync(const LimitOrder& order, int executed_qty) override {
         m_logger->info("Execution: qty={} on order={}\nPositions:\n{}", executed_qty, order, m_positions);
         // Correct curr_bid_px and curr-ask_px
         if (order.qty == 0) {
@@ -135,6 +136,10 @@ private:
                 ++curr_bid_px;
             }
         }
+        // Do not post orders, it will be done in OnOurTrade
+    }
+
+    void OnOurTrade(const LimitOrder& order, int executed_qty) override {
         PostOrders();
     }
 };

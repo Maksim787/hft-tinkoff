@@ -99,6 +99,12 @@ void Runner::OnUserConnectorReady() {
     if (IsReady()) m_strategy->OnConnectorsReadiness();
 }
 
+void Runner::OnOurTradeAsync(const LimitOrder& order, int executed_qty) {
+    // Always notify
+    assert(IsReady() && "Connectors should be ready before order processing");
+    m_strategy->OnOurTradeAsync(order, executed_qty);
+}
+
 void Runner::OnOurTrade(const LimitOrder& order, int executed_qty) {
     // Always notify
     assert(IsReady() && "Connectors should be ready before order processing");

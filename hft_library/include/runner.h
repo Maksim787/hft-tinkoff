@@ -115,6 +115,8 @@ private:
     // Methods for UserConnector
     void OnUserConnectorReady();
 
+    void OnOurTradeAsync(const LimitOrder& order, int executed_qty);
+
     void OnOurTrade(const LimitOrder& order, int executed_qty);
 
     // Methods for Runner

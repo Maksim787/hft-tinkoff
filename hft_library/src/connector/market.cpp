@@ -77,7 +77,7 @@ std::ostream& operator<<(std::ostream& os, const Trades& trades) {
 
 void Trades::Update(Direction direction, int px, int qty) {
     this->has_trade = true;
-    this->last_trade = MarketTrade {
+    this->last_trade = MarketTrade{
             .direction = direction,
             .px = px,
             .qty = qty
@@ -127,7 +127,7 @@ void MarketConnector::OrderBookStreamCallBack(MarketDataResponse* response) {
         const google::protobuf::RepeatedPtrField<OrderBookSubscription>& subscriptions = response->subscribe_order_book_response().order_book_subscriptions();
         assert(subscriptions.size() == 1);
         assert(subscriptions[0].subscription_status() == SubscriptionStatus::SUBSCRIPTION_STATUS_SUCCESS);
-        m_logger->info("OrderBookStream subscribe: success");
+        m_logger->info("OrderBookStream subscribe: success. depth={}", m_order_book.depth);
     } else if (response->has_orderbook()) {
         LockGuard lock = m_runner.GetEventLock();
         // Process subscription message
@@ -145,6 +145,8 @@ void MarketConnector::OrderBookStreamCallBack(MarketDataResponse* response) {
 
         ParseLevels(order_book.asks(), px, qty);
         m_order_book.Update<false>(px, qty);
+
+        assert(m_order_book.bid.px[0] < m_order_book.ask.px[0]);
 
         if (!m_is_order_book_stream_ready) {
             // Notify strategy about connector readiness
@@ -207,6 +209,9 @@ bool MarketConnector::IsReady() const {
 }
 
 void MarketConnector::ParseLevels(const google::protobuf::RepeatedPtrField<Order>& orders, int* px, int* qty) const {
+    if (orders.size() == 0) {
+        throw std::runtime_error("Empty orderbook. Probably, the trading session is closed");
+    }
     assert(orders.size() == m_order_book.depth);
     for (int i = 0; i < m_order_book.depth; ++i) {
         const Order& order = orders[i];

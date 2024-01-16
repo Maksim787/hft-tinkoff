@@ -213,7 +213,7 @@ void UserConnector::ProcessOurTrade(const LockGuard& lock, const std::string& or
             .order_id = order_id,
             .direction = direction,
             .px = px,
-            .qty = executed_qty
+            .qty = 0
     };
 
     // Remove empty order before strategy notification
@@ -223,8 +223,10 @@ void UserConnector::ProcessOurTrade(const LockGuard& lock, const std::string& or
 
     // Notify strategy
     if (lock.NotifyNow()) {
+        m_runner.OnOurTradeAsync(order, executed_qty);
         m_runner.OnOurTrade(order, executed_qty);
     } else {
+        m_runner.OnOurTradeAsync(order, executed_qty);
         m_logger->warn("Skip OurTrade notification: {} events pending", lock.GetNumberEventsPending());
     }
 }
