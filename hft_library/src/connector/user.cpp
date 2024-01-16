@@ -140,7 +140,7 @@ void UserConnector::CancelOrder(const std::string& order_id) {
     auto it = m_positions.orders.find(order_id);
     assert(it != m_positions.orders.end());
     // Send request
-    m_logger->info("[UserConnector] CancelOrder order_id={}", order_id);
+    m_logger->info("[UserConnector] CancelOrder order_id={} {} qty={}, px={}", order_id, it->second.direction, it->second.qty, it->second.px * m_instrument.px_step);
     ServiceReply reply = m_orders_service->CancelOrder(
             m_account_id,
             order_id

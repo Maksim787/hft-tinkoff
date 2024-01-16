@@ -4,6 +4,7 @@ private/
 log/
 
 scripts/venv/
+scrpts/research/
 
 .idea
 __pycache__
