@@ -83,6 +83,8 @@ public:
 
     std::shared_ptr<spdlog::logger> GetStrategyLogger();
 
+    int GetPendingEvents() const;
+
     // Order manipulations
     const LimitOrder& PostOrder(int px, int qty, Direction direction);
 

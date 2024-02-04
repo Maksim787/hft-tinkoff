@@ -31,17 +31,23 @@ private:
 
     template <bool IsBid>
     void PostOrdersForSide() {
+        if (m_runner.GetPendingEvents() >= 1) {
+            m_logger->warn("Break PostOrdersForSide: {} events pending", m_runner.GetPendingEvents());
+            return;
+        }
         // Get best price in the orderbook
         int sign = GetOb<IsBid>().Sign();
 
         // Update curr_bid_px if necessary
         if (m_positions.money / curr_bid_px / order_size == 0) {
             // We only have the asset -> decrease the curr_bid_px
-            curr_bid_px = std::min(static_cast<int>(curr_bid_px), m_order_book.bid.px[0] - spread + 1);
+            // ask = best_ask + spread
+            curr_bid_px = std::min(static_cast<int>(curr_bid_px), m_order_book.ask.px[0]);
         }
         if (m_positions.qty / order_size == 0) {
             // We only have money -> increase the curr_bid_px
-            curr_bid_px = std::max(static_cast<int>(curr_bid_px), m_order_book.bid.px[0] - spread + 1);
+            // bid = best_bid - spread
+            curr_bid_px = std::max(static_cast<int>(curr_bid_px), m_order_book.bid.px[0] - spread);
         }
 
         // Calculate start px for orders
@@ -88,6 +94,10 @@ private:
             } catch (const ServiceReply& reply) {
                 m_logger->warn("Could not cancel the order (possible execution)");
             }
+            if (m_runner.GetPendingEvents() >= 1) {
+                m_logger->warn("Break cancelling orders: {} events pending", m_runner.GetPendingEvents());
+                return; // Skip cancelling orders while some events are pending
+            }
         }
 
         Direction direction = IsBid ? Direction::Buy : Direction::Sell;
@@ -97,6 +107,10 @@ private:
                     m_runner.PostOrder(px, order_size, direction);
                 } catch (const ServiceReply& reply) {
                     m_logger->warn("Could not post the order (TODO: fix the cancel order)");
+                }
+                if (m_runner.GetPendingEvents() >= 1) {
+                    m_logger->warn("Break posing orders: {} events pending", m_runner.GetPendingEvents());
+                    return; // Skip placing orders while some events are pending
                 }
             }
         }
@@ -116,12 +130,12 @@ private:
     }
 
     void OnOrderBookUpdate() override {
-        m_logger->trace("OrderBook update.\tcurr_bid_px={}", curr_bid_px);
+        m_logger->trace("OrderBook update.\tcurr_bid_px={}; curr_ask_px={}", curr_bid_px * m_instrument.px_step, (curr_bid_px + spread) * m_instrument.px_step);
         PostOrders();
     }
 
     void OnTradesUpdate() override {
-        m_logger->trace("{}.\tcurr_bid_px={}", m_trades, curr_bid_px);
+        m_logger->trace("{}.\tcurr_bid_px={}; curr_ask_px={}", m_trades, curr_bid_px * m_instrument.px_step, (curr_bid_px + spread) * m_instrument.px_step);
         PostOrders();
     }
 
