@@ -1,3 +1,6 @@
 [submodule "TinkoffInvestSDK"]
 	path = hft_library/third_party/TinkoffInvestSDK
 	url = https://github.com/samoilovv/TinkoffInvestSDK.git
+[submodule "hft_library/third_party/clickhouse-cpp"]
+	path = hft_library/third_party/clickhouse-cpp
+	url = https://github.com/ClickHouse/clickhouse-cpp.git
