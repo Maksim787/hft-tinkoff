@@ -106,7 +106,7 @@ private:
                 try {
                     m_runner.PostOrder(px, order_size, direction);
                 } catch (const ServiceReply& reply) {
-                    m_logger->warn("Could not post the order (TODO: fix the cancel order)");
+                    m_logger->warn("Could not post the order");
                 }
                 if (m_runner.GetPendingEvents() >= 1) {
                     m_logger->warn("Break posing orders: {} events pending", m_runner.GetPendingEvents());
@@ -123,7 +123,7 @@ private:
 
     void OnConnectorsReadiness() override {
         m_logger->info("All connectors are ready");
-        m_logger->info("OrderBook:\n{}\nTrades:{}\nPositions:\n{}", m_order_book, m_trades, m_positions);
+        m_logger->info("OrderBook:\n{}\nTrades: {}\nPositions:\n{}", m_order_book, m_trades, m_positions);
         curr_bid_px = m_order_book.bid.px[0];
         // Post initial orders
         PostOrders();

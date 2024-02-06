@@ -135,6 +135,8 @@ const LimitOrder& UserConnector::PostOrder(int px, int qty, Direction direction)
     }
 }
 
+// TODO: CancelAll()
+
 void UserConnector::CancelOrder(const std::string& order_id) {
     // Check order existence
     auto it = m_positions.orders.find(order_id);

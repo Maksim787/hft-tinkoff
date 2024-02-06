@@ -47,9 +47,13 @@ Type* ParseReply(ServiceReply& reply, std::shared_ptr<spdlog::logger> logger) {
         // Get error code
         std::string code = reply.GetStatus().error_message();
         // Find the error
-        auto it = ERROR_DEFINITION.find(std::stoi(code));
-        std::string description = it != ERROR_DEFINITION.end() ? it->second : "Unknown Error (add it to the dictionary)";
-        logger->warn("Error Code: {}; Descriptions: {}", code, description);
+        try {
+            auto it = ERROR_DEFINITION.find(std::stoi(code));
+            std::string description = it != ERROR_DEFINITION.end() ? it->second : "Unknown Error (add it to the dictionary)";
+            logger->warn("Error Code: {}; Description: {}", code, description);
+        } catch (const std::invalid_argument& exc) {
+            logger->error("Error Code: {}", code);
+        }
         throw reply;
     }
     auto response = std::dynamic_pointer_cast<Type>(reply.ptr());

@@ -4,7 +4,12 @@ private/
 log/
 
 scripts/venv/
-scrpts/research/
+scripts/cache/
+*.ipynb
+old.py
+tmp.py
+
+output.txt
 
 .idea
 __pycache__

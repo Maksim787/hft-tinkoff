@@ -88,7 +88,7 @@ private:
 
     void OnConnectorsReadiness() override {
         m_logger->info("All connectors are ready");
-        m_logger->info("OrderBook:\n{}\nTrades:{}\nPositions:\n{}", m_order_book, m_trades, m_positions);
+        m_logger->info("OrderBook:\n{}\nTrades: {}\nPositions:\n{}", m_order_book, m_trades, m_positions);
         // Post initial orders
         PostOrders();
     }
