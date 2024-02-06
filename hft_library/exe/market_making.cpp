@@ -1,6 +1,8 @@
-#include <config.h>
-#include <runner.h>
-#include <strategy.h>
+#define FMT_HEADER_ONLY
+
+#include "config.h"
+#include "runner.h"
+#include "strategy.h"
 
 
 class ExampleStrategy : public Strategy {

@@ -1,5 +1,7 @@
-#include <strategy.h>
-#include <runner.h>
+#define FMT_HEADER_ONLY
+
+#include "strategy.h"
+#include "runner.h"
 
 Strategy::Strategy(Runner& runner)
         :
