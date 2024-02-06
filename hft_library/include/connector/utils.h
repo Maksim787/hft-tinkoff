@@ -3,7 +3,7 @@
 #include <iostream>
 #include <spdlog/spdlog.h>
 
-#include "hft_library/third_party/TinkoffInvestSDK/investapiclient.h"
+#include <investapiclient.h>
 
 class Instrument {
     constexpr static double PRECISION = 1e-20;

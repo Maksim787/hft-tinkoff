@@ -3,11 +3,11 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/fmt/ostr.h>
 
-#include "hft_library/third_party/TinkoffInvestSDK/investapiclient.h"
-#include "hft_library/third_party/TinkoffInvestSDK/services/marketdatastreamservice.h"
+#include <investapiclient.h>
+#include <marketdatastreamservice.h>
 
-#include "constants.h"
-#include "connector/utils.h"
+#include <constants.h>
+#include <connector/utils.h>
 
 class Runner;
 

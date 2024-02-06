@@ -1,8 +1,6 @@
-#define FMT_HEADER_ONLY
-
 #include <iostream>
 
-#include "config.h"
+#include <config.h>
 
 
 int main() {

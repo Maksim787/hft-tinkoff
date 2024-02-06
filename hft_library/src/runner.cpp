@@ -1,11 +1,9 @@
-#define FMT_HEADER_ONLY
-
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_sinks.h>
 
-#include "runner.h"
-#include "constants.h"
+#include <runner.h>
+#include <constants.h>
 
 Runner::Runner(const ConfigType& config, const StrategyGetter& strategy_getter)
         :

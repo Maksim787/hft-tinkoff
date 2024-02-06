@@ -1,11 +1,9 @@
-#define FMT_HEADER_ONLY
+#include <investapiclient.h>
+#include <marketdatastreamservice.h>
+#include <ordersstreamservice.h>
 
-#include "hft_library/third_party/TinkoffInvestSDK/investapiclient.h"
-#include "hft_library/third_party/TinkoffInvestSDK/services/marketdatastreamservice.h"
-#include "hft_library/third_party/TinkoffInvestSDK/services/ordersstreamservice.h"
-
-#include "config.h"
-#include "constants.h"
+#include <config.h>
+#include <constants.h>
 
 
 void StreamCallBack(ServiceReply reply) {

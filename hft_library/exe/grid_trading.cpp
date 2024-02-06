@@ -1,6 +1,7 @@
-#include "config.h"
-#include "runner.h"
-#include "strategy.h"
+#include <config.h>
+#include <runner.h>
+#include <strategy.h>
+
 
 class ExampleStrategy : public Strategy {
 private:
