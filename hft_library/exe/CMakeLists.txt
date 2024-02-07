@@ -10,5 +10,6 @@ foreach (EXECUTABLE_RAW_NAME ${EXECUTABLES})
     add_executable(${EXECUTABLE_NAME} ${EXECUTABLE_RAW_NAME})
 
     # Link libraries
-    target_link_libraries(${EXECUTABLE_NAME} PRIVATE hft_library)
+    target_include_directories(${EXECUTABLE_NAME} PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/third_party/clickhouse-cpp/ $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/third_party/clickhouse-cpp/contrib/absl)
+    target_link_libraries(${EXECUTABLE_NAME} PRIVATE hft_library clickhouse-cpp-lib)
 endforeach ()

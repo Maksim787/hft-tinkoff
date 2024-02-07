@@ -12,6 +12,7 @@
 #include "connector/utils.h"
 #include "connector/user.h"
 #include "connector/market.h"
+#include "connector/logger.h"
 
 
 class Runner;
@@ -43,6 +44,11 @@ private:
     std::shared_ptr<spdlog::logger> m_mkt_logger;
     std::shared_ptr<spdlog::logger> m_usr_logger;
     std::shared_ptr<spdlog::logger> m_strategy_logger;
+
+    std::shared_ptr<CHLogger<CHLoggerType::EOrderBook>> m_ob_logger;
+    std::shared_ptr<CHLogger<CHLoggerType::ETrades>> m_t_logger;
+    std::shared_ptr<CHLogger<CHLoggerType::EOrderLog>> m_ol_logger;
+    std::shared_ptr<CHLogger<CHLoggerType::EIndicators>> m_i_logger;
 
     // Client for connectors
     InvestApiClient m_client;
@@ -82,6 +88,8 @@ public:
     UserConnector& GetUserConnector();
 
     std::shared_ptr<spdlog::logger> GetStrategyLogger();
+
+    std::shared_ptr<CHLoggerManager> GetCHLoggerManager();
 
     int GetPendingEvents() const;
 

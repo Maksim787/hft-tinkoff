@@ -6,6 +6,7 @@
 
 #include "runner.h"
 #include "constants.h"
+#include "connector/logger.h"
 
 Runner::Runner(const ConfigType& config, const StrategyGetter& strategy_getter)
         :
@@ -15,6 +16,11 @@ Runner::Runner(const ConfigType& config, const StrategyGetter& strategy_getter)
         m_mkt_logger(std::make_shared<spdlog::logger>("Market", spdlog::sinks_init_list{m_file_sink, std::make_shared<spdlog::sinks::stdout_sink_mt>()})),
         m_usr_logger(std::make_shared<spdlog::logger>("User", spdlog::sinks_init_list{m_file_sink, std::make_shared<spdlog::sinks::stdout_sink_mt>()})),
         m_strategy_logger(std::make_shared<spdlog::logger>("Strategy", spdlog::sinks_init_list{m_file_sink, std::make_shared<spdlog::sinks::stdout_sink_mt>()})),
+        m_ob_logger(std::make_shared<CHLogger<CHLoggerType::EOrderBook>>()),
+        m_t_logger(std::make_shared<CHLogger<CHLoggerType::ETrades>>()),
+        m_ol_logger(std::make_shared<CHLogger<CHLoggerType::EOrderLog>>()),
+        m_i_logger(std::make_shared<CHLogger<CHLoggerType::EIndicators>>()),
+
         m_client(ENDPOINT, config["runner"]["token"].as<std::string>()),
         // TODO: Get/Check instrument information in RunTime
         m_instrument(
@@ -69,6 +75,10 @@ std::shared_ptr<spdlog::logger> Runner::GetUserLogger() {
 
 std::shared_ptr<spdlog::logger> Runner::GetStrategyLogger() {
     return m_strategy_logger;
+}
+
+std::shared_ptr<CHLoggerManager> Runner::GetCHLoggerManager() {
+    return std::make_shared<CHLoggerManager>(*m_ob_logger, *m_t_logger, *m_ol_logger, *m_i_logger);
 }
 
 int Runner::GetPendingEvents() const {

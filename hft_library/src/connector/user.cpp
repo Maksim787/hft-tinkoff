@@ -6,7 +6,6 @@
 #include "connector/user.h"
 #include "runner.h"
 
-
 std::ostream& operator<<(std::ostream& os, const LimitOrder& order) {
     os << "Order "
        << order.order_id << ": "
@@ -35,6 +34,7 @@ UserConnector::UserConnector(Runner& runner, const ConfigType& config)
         m_runner(runner),
         m_client(runner.GetClient()),
         m_logger(runner.GetUserLogger()),
+        m_ch_logger_manager(runner.GetCHLoggerManager()),
         m_account_id(config["user"]["account_id"].as<std::string>()),
         m_instrument(runner.GetInstrument()) {}
 
@@ -99,6 +99,15 @@ const LimitOrder& UserConnector::PostOrder(int px, int qty, Direction direction)
     // Convert px to Tinkoff API px
     auto[units, nano] = m_instrument.PxToQuotation(px);
     // Send request
+    LoggableRow lr;
+    lr.type = CHLoggerType::EOrderLog;
+    lr.tp = std::chrono::system_clock::now();
+    lr.trade_type = OrderLogRowType::POST_ORDER;
+    lr.px = static_cast<uint64_t>(px);
+    lr.qty = static_cast<uint64_t>(qty);
+    lr.direction = direction;
+
+    m_ch_logger_manager->Print(lr);
     m_logger->info("PostOrder: {} qty={}, px={}.{} ({})", direction, qty, units, nano, px);
     ServiceReply reply = m_orders_service->PostOrder(
             m_instrument.figi,
@@ -143,6 +152,7 @@ void UserConnector::CancelOrder(const std::string& order_id) {
     auto it = m_positions.orders.find(order_id);
     assert(it != m_positions.orders.end());
     // Send request
+    //
     m_logger->info("[UserConnector] CancelOrder order_id={} {} qty={}, px={}", order_id, it->second.direction, it->second.qty, it->second.px * m_instrument.px_step);
     ServiceReply reply = m_orders_service->CancelOrder(
             m_account_id,

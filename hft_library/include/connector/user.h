@@ -9,7 +9,7 @@
 
 #include "constants.h"
 #include "connector/utils.h"
-
+#include "connector/logger.h"
 
 class Runner;
 
@@ -44,6 +44,8 @@ private:
     InvestApiClient& m_client;
     // Logger
     std::shared_ptr<spdlog::logger> m_logger;
+
+    std::shared_ptr<CHLoggerManager> m_ch_logger_manager;
 
     // Account
     const std::string m_account_id;
