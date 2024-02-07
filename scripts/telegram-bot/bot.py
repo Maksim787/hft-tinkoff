@@ -68,8 +68,9 @@ async def send_message(message: str):
     except Exception as ex:
         exception_message = f"Exception:\n{ex}\nTraceback:\n{traceback.format_exc()}"
         print(exception_message)
-        await asyncio.sleep(10)
-        await bot.send_message(channel_id, exception_message, parse_mode="MarkdownV2")
+        await asyncio.sleep(1)
+        await bot.send_message(channel_id, f'```\n{exception_message}\n```', parse_mode="MarkdownV2")
+        await bot.send_message(channel_id, message, parse_mode="MarkdownV2")
         print("Not sent")
 
 
@@ -227,8 +228,8 @@ class TinkoffTask:
         qty = f"{positions.qty_total:9}"
         len_bid_orders = f"{len(bid_orders):2}"
         len_ask_orders = f"{len(ask_orders):2}"
-        bid_px_range = f"[{bid_px[0]} - {bid_px[-1]}]"
-        ask_px_range = f"[{ask_px[0]} - {ask_px[-1]}]"
+        bid_px_range = f"[{bid_px[0]} - {bid_px[-1]}]" if bid_px else f'[]'
+        ask_px_range = f"[{ask_px[0]} - {ask_px[-1]}]" if ask_px else f'[]'
         if old_positions is not None:
             assert old_orders is not None
             old_bid_orders, old_ask_orders, old_bid_px, old_ask_px = get_bid_ask_orders(old_orders)
@@ -238,8 +239,8 @@ class TinkoffTask:
             old_qty = f"{old_positions.qty_total:9}"
             old_len_bid_orders = f"{len(old_bid_orders):2}"
             old_len_ask_orders = f"{len(old_ask_orders):2}"
-            old_bid_px_range = f"[{old_bid_px[0]} - {old_bid_px[-1]}]"
-            old_ask_px_range = f"[{old_ask_px[0]} - {old_ask_px[-1]}]"
+            old_bid_px_range = f"[{old_bid_px[0]} - {old_bid_px[-1]}]" if old_bid_px else f'[]'
+            old_ask_px_range = f"[{old_ask_px[0]} - {old_ask_px[-1]}]" if old_ask_px else f'[]'
             if px != old_px:
                 px = f"{old_px} -> {px}"
             if money != old_money:
@@ -268,7 +269,7 @@ qty:     {qty}
 
 bid_orders: {len_bid_orders} {bid_px_range}
 ask_orders: {len_ask_orders} {ask_px_range}
-spread:     {ask_px[0] - bid_px[0]}
+spread:     {ask_px[0] - bid_px[0] if bid_px and ask_px else None}
 ```"""
 
     async def send_positions(self):
@@ -323,8 +324,9 @@ order_id   = {order_id}
     async def run_task(self):
         async with inv.AsyncClient(token=config["runner"]["token"]) as client:
             self.client = client
-            await send_message("Start monitoring positions and operations")
-            await asyncio.gather(self.trades_stream(), self.positions_monitor())
+            await send_message("Start monitoring positions")
+            await self.positions_monitor()
+            # await asyncio.gather(self.trades_stream(), self.positions_monitor())
 
 
 ########################################################

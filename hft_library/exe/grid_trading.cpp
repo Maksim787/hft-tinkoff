@@ -129,7 +129,7 @@ private:
     }
 
     void OnOrderBookUpdate() override {
-        m_logger->trace("OrderBook update.\tcurr_bid_px={}; curr_ask_px={}", curr_bid_px * m_instrument.px_step, (curr_bid_px + spread) * m_instrument.px_step);
+        m_logger->trace("OrderBook update.\tcurr_bid_px={}; curr_ask_px={}", curr_bid_px * m_instrument.px_step, (curr_bid_px + spread) * m_instrument.px_step, m_positions);
         PostOrders();
     }
 

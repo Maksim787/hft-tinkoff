@@ -33,6 +33,8 @@ public:
 private:
     friend class Runner;
 
+    // TODO: OnPingUpdate()
+
     // Runner methods
     virtual void OnConnectorsReadiness() = 0;
 

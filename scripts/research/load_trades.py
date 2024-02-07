@@ -5,6 +5,7 @@ sys.path.append(os.getcwd())
 
 import datetime
 import pickle
+import time
 import tinkoff.invest as inv
 from pathlib import Path
 from itertools import count
@@ -32,9 +33,10 @@ def exists(name: str) -> bool:
 
 
 def download_operations():
-    START = datetime.datetime(year=2024, month=2, day=1)
-    LIMIT = 1000
     today = datetime.datetime.today()
+    # START = datetime.datetime(year=2024, month=2, day=1)
+    START = today - datetime.timedelta(days=30)
+    LIMIT = 1000
     cursor = ""
     with inv.Client(token=config["runner"]["token"]) as client:
         positions = client.operations.get_positions(account_id=str(config['user']['account_id']))
@@ -60,6 +62,7 @@ def download_operations():
                 break
             cursor = operations.next_cursor
             print(f"Load operations: {i} ({len(operations.items)}) at {operations.items[-1].date}")
+            time.sleep(1)
     return positions, result
 
 
