@@ -2,7 +2,8 @@
 #include "runner.h"
 #include "strategy.h"
 
-class ExampleStrategy : public Strategy {
+
+class GridTrading : public Strategy {
 private:
     int max_levels;
     int order_size;
@@ -11,7 +12,7 @@ private:
     std::atomic_int curr_bid_px;
 
 public:
-    explicit ExampleStrategy(Runner& runner, const ConfigType& config)
+    explicit GridTrading(Runner& runner, const ConfigType& config)
             : Strategy(runner),
               max_levels(config["max_levels"].as<int>()),
               order_size(config["order_size"].as<int>()),
@@ -161,7 +162,7 @@ int main() {
     auto config = read_config();
 
     Runner::StrategyGetter strategy_getter = [](Runner& runner) {
-        return std::make_shared<ExampleStrategy>(runner, runner.GetConfig()["strategy"]);
+        return std::make_shared<GridTrading>(runner, runner.GetConfig()["strategy"]);
     };
     Runner runner(config, strategy_getter);
     runner.Start();

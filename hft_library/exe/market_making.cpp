@@ -5,13 +5,13 @@
 #include "strategy.h"
 
 
-class ExampleStrategy : public Strategy {
+class BboMarketMaking : public Strategy {
 private:
     int max_skip_qty;
     int place_qty;
 
 public:
-    explicit ExampleStrategy(Runner& runner, const ConfigType& config)
+    explicit BboMarketMaking(Runner& runner, const ConfigType& config)
             : Strategy(runner),
               max_skip_qty(config["max_skip_qty"].as<int>()),
               place_qty(config["place_qty"].as<int>()) {}
@@ -115,7 +115,7 @@ int main() {
     auto config = read_config();
 
     Runner::StrategyGetter strategy_getter = [](Runner& runner) {
-        return std::make_shared<ExampleStrategy>(runner, runner.GetConfig()["strategy"]);
+        return std::make_shared<BboMarketMaking>(runner, runner.GetConfig()["strategy"]);
     };
     Runner runner(config, strategy_getter);
     runner.Start();

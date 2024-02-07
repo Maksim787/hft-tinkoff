@@ -1,17 +1,15 @@
-import yaml
 import tinkoff.invest as inv
 
-from utils import quotation_to_float
+from common.utils import quotation_to_float, parse_config
 
 # Config:
 TICKER = 'SBER'
 ticker_type = 'share'
 # ticker_type = 'etf'
 
-with open('../private/config.yaml') as f:
-    config = yaml.safe_load(f)
+config = parse_config()
 
-with inv.Client(token=config['runner']['token']) as client:
+with inv.Client(token=config.token) as client:
     for class_code in ['SPBXM', 'TQCB', 'TQBR', 'SPBHKEX',
                        'TQIR', 'TQTF', 'TQOB', 'TQOD',
                        'TQOY', 'SPBBND', 'SPBEQRU', 'SPHKTF_HKD',

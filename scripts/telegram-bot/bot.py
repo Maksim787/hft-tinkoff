@@ -9,10 +9,7 @@ import tinkoff.invest as inv
 import pandas as pd
 import logging
 import asyncio
-import pytz
 import datetime
-import pprint
-import aiogram
 import traceback
 from dataclasses import dataclass
 from collections import deque
