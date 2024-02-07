@@ -1,6 +1,17 @@
+import sys
+import os
+
+sys.path.append(os.getcwd())
+
+
 import time
 from itertools import count
-import aiogram  # to check imports in the environment
+
+# to check imports in the environment
+import aiogram
+from common.utils import read_config
+
+config = read_config()
 
 
 def main():
