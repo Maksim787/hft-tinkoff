@@ -40,7 +40,7 @@ assert Path(strategy_logs_path).parent.exists()
 
 
 def launch_telegram_bot(bot_logs_file):
-    os.chdir(root / 'scripts')
+    os.chdir(root / "scripts")
     print("Launch telegram bot")
     telegram_bot_p = subprocess.Popen(["python", str(bot_script_path)], stdout=bot_logs_file, stderr=bot_logs_file)
     print("Launch telegram bot: success\n")
@@ -72,19 +72,44 @@ def stop_process(process, name: str):
     print(f"Stop process {name}: success (stopped by signal)\n")
 
 
+def is_trading_time():
+    now = datetime.datetime.utcnow().replace(tzinfo=pytz.utc).astimezone(pytz.timezone("Europe/Moscow")).replace(tzinfo=None)
+    trading_hours = [
+        [datetime.time(hour=10, minute=30), datetime.time(hour=18, minute=30)],  # main session
+        [datetime.time(hour=19, minute=30), datetime.time(hour=23, minute=30)],  # evening session
+    ]
+    print(f"Trading hours: {trading_hours}")
+    for start, finish in trading_hours:
+        if start <= now.time() <= finish:
+            print(f"Start strategy in [{start}, {finish}]. Now: {now.time()}")
+            return True
+    print(f"Sleep 60 seconds. Now: {now.time()}")
+    time.sleep(60)
+    return False
+
+
 def main():
     n_reboots = 0
+    last_reboot = datetime.datetime.now() - datetime.timedelta(days=1)
     while True:
+        print("Wait for exchange to open")
         while True:
-            now = datetime.datetime.utcnow().replace(tzinfo=pytz.utc).astimezone(pytz.timezone("Europe/Moscow"))
-            if datetime.time(hour=10, minute=30) < now.time() < datetime.time(hour=18, minute=30) or datetime.time(hour=19, minute=30) < now.time() < datetime.time(hour=23, minute=40):
+            if is_trading_time():
                 break
-            else:
-                time.sleep(30)
+
+        # Reboot the strategy
         n_reboots += 1
-        print(f'Reboot: {n_reboots = }')
-        if n_reboots >= 5:
+        print(f"Reboot: {n_reboots = }")
+        # Check number of reboots
+        if n_reboots >= config["max_reboots"]:
+            print(f"[ERROR] Huge number of reboots ({n_reboots}): exit")
             return
+        # Check time between reboots
+        now = datetime.datetime.now()
+        if now - last_reboot < datetime.timedelta(minutes=config["min_minutes_between_reboots"]):
+            print(f"[ERROR] Time between reboots {now - last_reboot} is smaller than {config['min_minutes_between_reboots']} from config")
+            return
+        last_reboot = now
 
         # Cancel orders
         print("\nCancel orders")
