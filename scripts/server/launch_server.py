@@ -79,6 +79,10 @@ def is_trading_time():
         [datetime.time(hour=19, minute=30), datetime.time(hour=23, minute=30)],  # evening session
     ]
     print(f"Trading hours: {trading_hours}")
+    if now.weekday() in [5, 6]:
+        print(f"Do not trade on weekends. Now: {now}. Sleep 5 hours")
+        time.sleep(60 * 60 * 5)
+        return False
     for start, finish in trading_hours:
         if start <= now.time() <= finish:
             print(f"Start strategy in [{start}, {finish}]. Now: {now.time()}")
@@ -128,6 +132,8 @@ def main():
                 while True:
                     if strategy_p.poll() is not None:
                         print(f"Strategy exitied with code: {strategy_p.returncode}")
+                        time.sleep(5)
+                        stop_process(telegram_bot_p, f"telegram_bot {bot_script_path}")
                         break
                     if telegram_bot_p.poll() is not None:
                         print(f"Telegram bot exitied with code: {telegram_bot_p.returncode}")
