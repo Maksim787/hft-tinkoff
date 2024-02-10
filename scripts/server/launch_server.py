@@ -56,14 +56,15 @@ def launch_strategy(strategy_logs_file):
     return strategy_p
 
 
-def stop_process(process, name: str):
-    print(f"Stop process {name}")
-    if process.poll() is None:
-        process.send_signal(signal.SIGINT)
-    else:
-        print(f"Stop process {name}: success (already stopped)\n")
-        return
-    time.sleep(1)
+def stop_process(process, name: str, n_tries: int = 2):
+    for i in range(n_tries):
+        print(f"Stop process {name}")
+        if process.poll() is None:
+            process.send_signal(signal.SIGINT)
+            time.sleep(1)
+        else:
+            print(f"Stop process {name}: success (already stopped)\n")
+            return
     if process.poll() is None:
         print(f"[WARNING] Kill process {name}")
         process.kill()
@@ -74,10 +75,8 @@ def stop_process(process, name: str):
 
 def is_trading_time():
     now = datetime.datetime.utcnow().replace(tzinfo=pytz.utc).astimezone(pytz.timezone("Europe/Moscow")).replace(tzinfo=None)
-    trading_hours = [
-        [datetime.time(hour=10, minute=30), datetime.time(hour=18, minute=30)],  # main session
-        [datetime.time(hour=19, minute=30), datetime.time(hour=23, minute=30)],  # evening session
-    ]
+    print(config['trading_hours'])
+    trading_hours = [[datetime.datetime.strptime(hours["start"], "%H:%M").time(), datetime.datetime.strptime(hours["finish"], "%H:%M").time()] for hours in config["trading_hours"]]
     print(f"Trading hours: {trading_hours}")
     if now.weekday() in [5, 6]:
         print(f"Do not trade on weekends. Now: {now}. Sleep 5 hours")
@@ -125,14 +124,13 @@ def main():
             # Launch telegram bot
             telegram_bot_p = launch_telegram_bot(bot_logs_file)
             strategy_p = launch_strategy(strategy_logs_file)
-
             try:
                 # Wait for processes
                 print("Wait for processes")
                 while True:
                     if strategy_p.poll() is not None:
                         print(f"Strategy exitied with code: {strategy_p.returncode}")
-                        time.sleep(5)
+                        time.sleep(30)
                         stop_process(telegram_bot_p, f"telegram_bot {bot_script_path}")
                         break
                     if telegram_bot_p.poll() is not None:
