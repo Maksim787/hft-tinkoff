@@ -14,7 +14,7 @@ def quotation_to_float(q):
 
 
 def to_moscow(time: datetime.datetime) -> datetime.datetime:
-    return time.astimezone(MOSCOW_TZ)
+    return time.astimezone(MOSCOW_TZ).replace(tzinfo=None)
 
 
 @dataclass

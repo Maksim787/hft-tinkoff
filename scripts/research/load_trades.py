@@ -9,7 +9,7 @@ import time
 import tinkoff.invest as inv
 from pathlib import Path
 from itertools import count
-from common.utils import read_config
+from common.utils import read_config, to_moscow
 
 
 config = read_config()
@@ -61,7 +61,7 @@ def download_operations():
             if not operations.has_next:
                 break
             cursor = operations.next_cursor
-            print(f"Load operations: {i} ({len(operations.items)}) at {operations.items[-1].date}")
+            print(f"Load operations: {i} ({len(operations.items)}) at {to_moscow(operations.items[-1].date)}")
             time.sleep(1)
     return positions, result
 

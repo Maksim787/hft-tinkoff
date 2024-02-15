@@ -74,7 +74,7 @@ def stop_process(process, name: str, n_tries: int = 2):
 
 
 def is_trading_time():
-    now = datetime.datetime.utcnow().replace(tzinfo=pytz.utc).astimezone(pytz.timezone("Europe/Moscow")).replace(tzinfo=None)
+    now = to_moscow(datetime.datetime.utcnow().replace(tzinfo=pytz.utc))
     print(config['trading_hours'])
     trading_hours = [[datetime.datetime.strptime(hours["start"], "%H:%M").time(), datetime.datetime.strptime(hours["finish"], "%H:%M").time()] for hours in config["trading_hours"]]
     print(f"Trading hours: {trading_hours}")
@@ -118,6 +118,7 @@ def main():
         print("\nCancel orders")
         cancel_all_orders(debug=debug)
         print("Cancel orders: success\n")
+        time.sleep(2)
 
         # Open log files
         with open(bot_logs_path, "a") as bot_logs_file, open(strategy_logs_path, "a") as strategy_logs_file:
