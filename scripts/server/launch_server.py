@@ -99,6 +99,8 @@ def main():
         while True:
             if is_trading_time():
                 break
+            else:
+                n_reboots = 0  # reset reboot count during non-trading time
 
         # Reboot the strategy
         n_reboots += 1
