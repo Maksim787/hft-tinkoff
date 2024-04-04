@@ -1,0 +1,120 @@
+# Update
+sudo apt update
+
+# Fish
+sudo apt install fish -y
+sudo chsh -s $(which fish) hft
+
+# Git
+ssh-keygen -t rsa -b 4096
+scp ~/.ssh/id_rsa hft@158.160.122.142:~/.ssh/
+scp ~/.ssh/id_rsa.pub hft@158.160.122.142:~/.ssh/
+
+sudo apt install git -y
+git clone git@github.com:Maksim787/hft-tinkoff.git
+cd hft-tinkoff
+git submodule update --init --recursive
+
+# Make directories
+mkdir private
+mkdir log
+scp ~/HFT/hft-tinkoff/private/config.yaml hft@158.160.122.142:~/hft-tinkoff/private/
+
+# Swap
+sudo swapon --show
+sudo fallocate -l 6G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+sudo swapon --show
+free -h
+
+# Install compilers
+sudo apt install cmake -y
+sudo apt install g++ -y
+sudo apt install build-essential libtool autoconf unzip wget -y
+sudo apt install libssl-dev -y
+
+version=3.28
+build=1
+mkdir ~/temp
+cd ~/temp
+wget https://cmake.org/files/v$version/cmake-$version.$build.tar.gz
+tar -xzvf cmake-$version.$build.tar.gz
+cd cmake-$version.$build/
+./bootstrap
+make -j$(nproc)
+sudo make install
+
+# Python
+sudo apt install software-properties-common -y
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt install python3.10 -y
+sudo update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1
+sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+sudo apt install python3-pip -y
+pip install -r hft-tinkoff/scripts/requirements.txt
+# or
+cat hft-tinkoff/scripts/requirements.txt | xargs -n 1 pip install
+
+# Install dependencies
+sudo apt install protobuf-compiler tmux htop -y
+
+# Protobuf
+# https://github.com/protocolbuffers/protobuf/blob/main/cmake/README.md
+sudo apt-get install libabsl-dev -y
+git clone https://github.com/google/protobuf
+cd protobuf
+git submodule update --init --recursive
+cmake . -DCMAKE_CXX_STANDARD=14
+cmake --build . --parallel 2
+sudo cmake --install .
+cd ..
+
+# GRPC
+# https://grpc.io/docs/languages/cpp/quickstart/
+sudo apt install -y build-essential autoconf libtool pkg-config
+git clone --recurse-submodules -b v1.60.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc
+cd grpc
+mkdir -p cmake/build
+pushd cmake/build
+cmake -DgRPC_INSTALL=ON \
+      -DgRPC_BUILD_TESTS=OFF \
+      -DCMAKE_INSTALL_PREFIX=$MY_INSTALL_DIR \
+      ../..
+make -j 4
+sudo make install
+popd
+
+# YAML
+sudo apt install libyaml-cpp-dev -y
+
+# spd-log
+sudo apt install libspdlog-dev -y
+
+# Change cmake
+cd hft-tinkoff/
+vim hft_library/third_party/TinkoffInvestSDK/cmake/common.cmake
+set(GRPC_FETCHCONTENT false)
+
+# Build project
+cd hft-tinkoff/
+mkdir cmake-build-debug
+cd cmake-build-debug
+cmake -DCMAKE_BUILD_TYPE=Debug ..
+cmake --build .
+
+# Remove unnecessary parts
+rm -rf temp/
+rm -rf protobuf/
+rm -rf grpc/
+
+
+tmux new -s hft
+cd scripts/
+python server/launch_server.py | tee -a server/launcher_logs.txt
+
+scp hft@158.160.122.142:~/hft-tinkoff/log/log.txt ~/HFT/hft-tinkoff/server_logs/
+scp hft@158.160.122.142:~/hft-tinkoff/scripts/server/bot_logs.txt ~/HFT/hft-tinkoff/server_logs/
+scp hft@158.160.122.142:~/hft-tinkoff/scripts/server/strategy_logs.txt ~/HFT/hft-tinkoff/server_logs/
+scp hft@158.160.122.142:~/hft-tinkoff/scripts/server/launcher_logs.txt ~/HFT/hft-tinkoff/server_logs/

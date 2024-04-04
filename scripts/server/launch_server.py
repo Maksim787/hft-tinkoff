@@ -9,11 +9,13 @@ import time
 import datetime
 import pytz
 from pathlib import Path
+from functools import partial
 from strategy_utils.cancel_all import cancel_all_orders
 from common.utils import to_moscow
 from common.utils import read_config
 
 config = read_config()["server"]
+print = partial(print, flush=True)
 
 # Find root directory
 root = Path.cwd()
