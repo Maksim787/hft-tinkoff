@@ -22,7 +22,7 @@
 
 Notes on implementation:
 
-1. Always notify strategy on our trade in `OnOurTradeAsync` callback.
+1. OurTrade notification blocks other events from processing
 2. Do not notify about events if more events are pending. For instance, we got simultaneously two updates from exchange. The strategy will be notified only about the last one.
 3. Post and Cancel orders block strategy for some time. It may be good to check that more events are pending and to stop posting orders.
 

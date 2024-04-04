@@ -112,7 +112,7 @@ rm -rf grpc/
 
 tmux new -s hft
 cd scripts/
-python server/launch_server.py | tee -a server/launcher_logs.txt
+python scripts/server/launch_server.py | tee -a scripts/server/launcher_logs.txt
 
 scp hft@158.160.122.142:~/hft-tinkoff/log/log.txt ~/HFT/hft-tinkoff/server_logs/
 scp hft@158.160.122.142:~/hft-tinkoff/scripts/server/bot_logs.txt ~/HFT/hft-tinkoff/server_logs/

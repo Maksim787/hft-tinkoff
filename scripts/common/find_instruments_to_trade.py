@@ -1,10 +1,15 @@
-from dataclasses import dataclass
+import sys
+import os
+
+sys.path.append(os.getcwd())
 
 import tinkoff.invest as inv
-from common.utils import quotation_to_float, parse_config
+from dataclasses import dataclass
+from scripts.common.utils import quotation_to_float, parse_config
 
 # Config:
 MAIN_ACCOUNT_NAME = 'Портфель'
+MAIN_ACCOUNT_NAME = 'Алготрейдинг'
 
 
 @dataclass
@@ -51,7 +56,11 @@ def main():
         accounts = client.users.get_accounts().accounts
         for account in accounts:
             print(f'{account.name}: {account.id}: {account}')
-        main_account = next(filter(lambda x: x.name == MAIN_ACCOUNT_NAME, accounts))
+        try:
+            main_account = next(filter(lambda x: x.name == MAIN_ACCOUNT_NAME, accounts))
+        except StopIteration:
+            print([a.name for a in accounts])
+            raise
         account_id = main_account.id
 
         positions = client.operations.get_positions(account_id=account_id).securities

@@ -1,5 +1,3 @@
-#define FMT_HEADER_ONLY
-
 #include "config.h"
 
 #include <yaml-cpp/yaml.h>

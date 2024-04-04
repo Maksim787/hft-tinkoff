@@ -1,9 +1,10 @@
-import tinkoff.invest as inv
 import sys
 import os
 
 sys.path.append(os.getcwd())
-from common.utils import quotation_to_float, parse_config
+
+import tinkoff.invest as inv
+from scripts.common.utils import quotation_to_float, parse_config
 
 # Config:
 TICKER = 'SBER'

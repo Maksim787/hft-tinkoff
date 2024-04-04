@@ -224,14 +224,8 @@ void UserConnector::ProcessOurTrade(const LockGuard& lock, const std::string& or
         m_positions.orders.erase(it);
     }
 
-    // Notify strategy
-    if (lock.NotifyNow()) {
-        m_runner.OnOurTradeAsync(order, executed_qty);
-        m_runner.OnOurTrade(order, executed_qty);
-    } else {
-        m_runner.OnOurTradeAsync(order, executed_qty);
-        m_logger->warn("Skip OurTrade notification: {} events pending", lock.GetNumberEventsPending());
-    }
+    // Notify strategy (lock all other events)
+    m_runner.OnOurTrade(order, executed_qty);
 }
 
 const LimitOrder& UserConnector::ProcessNewPostOrder(const std::string& order_id, int px, int qty, Direction direction) {

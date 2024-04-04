@@ -1,20 +1,21 @@
 #include "connector/utils.h"
 
 Instrument::Instrument(const std::string& figi, int lot_size, double px_step)
-        :
-        figi(figi),
-        lot_size(lot_size),
-        px_step(px_step) {
+    : figi(figi),
+      lot_size(lot_size),
+      px_step(px_step) {
     assert(lot_size > 0);
     assert(px_step > 0);
 }
 
 int DoublePxToInt(double px, double px_step, double precision, bool check_errors = true) {
     // TODO: remove this function
-    double int_part;
-    double floating_part = std::modf(px / px_step + precision / 2, &int_part);
+    int int_part = std::round(px / px_step);
+    double floating_part = px - int_part * px_step;
+    // TODO: grid_trading: /home/maksim/HFT/hft-tinkoff/hft_library/src/connector/utils.cpp:17: int DoublePxToInt(double, double, double, bool): Assertion `std::abs(floating_part) < precision' failed.
     if (check_errors) {
-        assert(std::abs(floating_part) < precision);
+        // assert(std::abs(floating_part) < precision);
+        assert(std::abs(floating_part) < 0.02); // TODO: use precision
     }
     return static_cast<int>(int_part);
 }

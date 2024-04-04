@@ -9,7 +9,7 @@ import time
 import tinkoff.invest as inv
 from pathlib import Path
 from itertools import count
-from common.utils import read_config, to_moscow
+from scripts.common.utils import read_config, to_moscow
 
 
 config = read_config()

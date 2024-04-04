@@ -1,5 +1,3 @@
-#define FMT_HEADER_ONLY
-
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_sinks.h>
@@ -103,12 +101,6 @@ void Runner::OnUserConnectorReady() {
     m_is_usr_ready = true;
     m_runner_logger->info("UserConnector is Ready");
     if (IsReady()) m_strategy->OnConnectorsReadiness();
-}
-
-void Runner::OnOurTradeAsync(const LimitOrder& order, int executed_qty) {
-    // Always notify
-    assert(IsReady() && "Connectors should be ready before order processing");
-    m_strategy->OnOurTradeAsync(order, executed_qty);
 }
 
 void Runner::OnOurTrade(const LimitOrder& order, int executed_qty) {

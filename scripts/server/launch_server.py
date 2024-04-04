@@ -10,43 +10,55 @@ import datetime
 import pytz
 from pathlib import Path
 from functools import partial
-from strategy_utils.cancel_all import cancel_all_orders
-from common.utils import to_moscow
-from common.utils import read_config
 
-config = read_config()["server"]
+from scripts.common.cancel_all import cancel_all_orders
+from scripts.common.utils import to_moscow, read_config
+
+global_config = read_config()
+config = global_config["server"]
 print = partial(print, flush=True)
 
-# Find root directory
-root = Path.cwd()
-for i in range(10):
-    if root.name == "hft-tinkoff":
-        break
-    root = root.parent
-else:
-    assert False, f"{Path.cwd()}"
-print(f"Work in {root}\n")
-os.chdir(root)
+
+def find_root():
+    # Find root directory
+    root = Path.cwd()
+    for i in range(10):
+        if root.name == "hft-tinkoff":
+            break
+        root = root.parent
+    else:
+        assert False, f"{Path.cwd()}"
+    print(f"Work in {root}\n")
+    os.chdir(root)
+    return root
+
 
 # Parse config
 debug = config["debug"]
+assert debug == global_config["strategy"]["debug"]
 print(f"{debug = }")
-bot_script_path = Path(root) / (config["bot_script_path"] if not debug else "scripts/server/temp_bot.py")
+
+root = find_root()
+
+bot_script_path = Path(root) / (config["bot_script_path"] if not debug else config["debug_bot_script_path"])
 strategy_bin_path = Path(root) / config["strategy_bin_path"]
 bot_logs_path = Path(root) / config["bot_logs_path"]
 strategy_logs_path = Path(root) / config["strategy_logs_path"]
-print(bot_script_path)
-assert Path(bot_script_path).exists()
-assert Path(bot_logs_path).parent.exists()
-assert Path(strategy_logs_path).parent.exists()
+print(f"{bot_script_path = }")
+print(f"{strategy_bin_path = }")
+print(f"{bot_logs_path = }")
+print(f"{strategy_logs_path = }")
+
+assert strategy_bin_path.exists()
+assert bot_script_path.exists(), bot_script_path
+assert bot_logs_path.parent.exists()
+assert strategy_logs_path.parent.exists()
 
 
 def launch_telegram_bot(bot_logs_file):
-    os.chdir(root / "scripts")
     print("Launch telegram bot")
     telegram_bot_p = subprocess.Popen(["python", str(bot_script_path)], stdout=bot_logs_file, stderr=bot_logs_file)
     print("Launch telegram bot: success\n")
-    os.chdir(root)
     return telegram_bot_p
 
 
@@ -77,7 +89,7 @@ def stop_process(process, name: str, n_tries: int = 2):
 
 def is_trading_time():
     now = to_moscow(datetime.datetime.utcnow().replace(tzinfo=pytz.utc))
-    print(config['trading_hours'])
+    print(config["trading_hours"])
     trading_hours = [[datetime.datetime.strptime(hours["start"], "%H:%M").time(), datetime.datetime.strptime(hours["finish"], "%H:%M").time()] for hours in config["trading_hours"]]
     print(f"Trading hours: {trading_hours}")
     if now.weekday() in [5, 6]:
@@ -114,7 +126,7 @@ def main():
         # Check time between reboots
         now = datetime.datetime.now()
         if now - last_reboot < datetime.timedelta(minutes=config["min_minutes_between_reboots"]):
-            print(f"[ERROR] Time between reboots {now - last_reboot} is smaller than {config['min_minutes_between_reboots']} from config")
+            print(f"[ERROR] Time between reboots {now - last_reboot} is smaller than {config['min_minutes_between_reboots']} minutes from config")
             return
         last_reboot = now
 

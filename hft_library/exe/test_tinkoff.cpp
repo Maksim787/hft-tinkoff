@@ -1,5 +1,3 @@
-#define FMT_HEADER_ONLY
-
 #include "hft_library/third_party/TinkoffInvestSDK/investapiclient.h"
 #include "hft_library/third_party/TinkoffInvestSDK/services/marketdatastreamservice.h"
 #include "hft_library/third_party/TinkoffInvestSDK/services/ordersstreamservice.h"

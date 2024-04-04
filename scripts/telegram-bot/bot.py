@@ -3,7 +3,7 @@ import os
 
 sys.path.append(os.getcwd())
 
-from common.utils import read_config, quotation_to_float, to_moscow
+from scripts.common.utils import read_config, quotation_to_float, to_moscow
 
 import tinkoff.invest as inv
 import pandas as pd
@@ -66,7 +66,7 @@ async def send_message(message: str):
         exception_message = f"Exception:\n{ex}\nTraceback:\n{traceback.format_exc()}"
         print(exception_message)
         await asyncio.sleep(1)
-        await bot.send_message(channel_id, f'```\n{exception_message}\n```', parse_mode="MarkdownV2")
+        await bot.send_message(channel_id, f"```\n{exception_message}\n```", parse_mode="MarkdownV2")
         await bot.send_message(channel_id, message, parse_mode="MarkdownV2")
         print("Not sent")
 
@@ -194,7 +194,7 @@ class TinkoffTask:
             self.direction = self.BUY if order.direction == inv.OrderDirection.ORDER_DIRECTION_BUY else self.SELL
             self.qty_requested = order.lots_requested
             self.qty_executed = order.lots_executed
-            self.px = quotation_to_float(order.initial_order_price)
+            self.px = quotation_to_float(order.initial_order_price) / self.qty_requested
             self.place_time = to_moscow(order.order_date)
 
         def __eq__(self, other):
@@ -225,8 +225,8 @@ class TinkoffTask:
         qty = f"{positions.qty_total:9}"
         len_bid_orders = f"{len(bid_orders):2}"
         len_ask_orders = f"{len(ask_orders):2}"
-        bid_px_range = f"[{bid_px[0]} - {bid_px[-1]}]" if bid_px else f'[]'
-        ask_px_range = f"[{ask_px[0]} - {ask_px[-1]}]" if ask_px else f'[]'
+        bid_px_range = f"[{bid_px[0]} - {bid_px[-1]}]" if bid_px else f"[]"
+        ask_px_range = f"[{ask_px[0]} - {ask_px[-1]}]" if ask_px else f"[]"
         if old_positions is not None:
             assert old_orders is not None
             old_bid_orders, old_ask_orders, old_bid_px, old_ask_px = get_bid_ask_orders(old_orders)
@@ -236,8 +236,8 @@ class TinkoffTask:
             old_qty = f"{old_positions.qty_total:9}"
             old_len_bid_orders = f"{len(old_bid_orders):2}"
             old_len_ask_orders = f"{len(old_ask_orders):2}"
-            old_bid_px_range = f"[{old_bid_px[0]} - {old_bid_px[-1]}]" if old_bid_px else f'[]'
-            old_ask_px_range = f"[{old_ask_px[0]} - {old_ask_px[-1]}]" if old_ask_px else f'[]'
+            old_bid_px_range = f"[{old_bid_px[0]} - {old_bid_px[-1]}]" if old_bid_px else f"[]"
+            old_ask_px_range = f"[{old_ask_px[0]} - {old_ask_px[-1]}]" if old_ask_px else f"[]"
             if px != old_px:
                 px = f"{old_px} -> {px}"
             if money != old_money:
@@ -356,7 +356,7 @@ async def ping_task(message: types.Message) -> None:
 # Run tasks
 ########################################################
 async def main():
-    channel_info = await bot.get_chat("@" + config["telegram"]["channel_id"])
+    channel_info = await bot.get_chat("@" + (config["telegram"]["channel_id"] if not config["server"]["debug"] else config["telegram"]["debug_channel_id"]))
     global channel_id
     channel_id = channel_info.id
 

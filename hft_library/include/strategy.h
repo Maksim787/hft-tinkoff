@@ -44,7 +44,5 @@ private:
     virtual void OnTradesUpdate() = 0;
 
     // User Connector methods
-    virtual void OnOurTradeAsync(const LimitOrder& order, int executed_qty) {};
-
     virtual void OnOurTrade(const LimitOrder& order, int executed_qty) = 0;
 };
