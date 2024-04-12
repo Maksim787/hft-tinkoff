@@ -1,11 +1,10 @@
+#include "connector/user.h"
+
 #include <iomanip>
 #include <iostream>
 
 #include "hft_library/third_party/TinkoffInvestSDK/services/operationsservice.h"
-
-#include "connector/user.h"
 #include "runner.h"
-
 
 std::ostream& operator<<(std::ostream& os, const LimitOrder& order) {
     os << "Order "
@@ -21,7 +20,7 @@ std::ostream& operator<<(std::ostream& os, const Positions& positions) {
     os << "Money: " << positions.money << "\n";
     os << "Orders: " << positions.orders.size() << "\n";
     int i = 0;
-    for (const auto&[order_id, order]: positions.orders) {
+    for (const auto& [order_id, order] : positions.orders) {
         os << i << ". ";
         os << order;
         os << "\n";
@@ -31,12 +30,18 @@ std::ostream& operator<<(std::ostream& os, const Positions& positions) {
 }
 
 UserConnector::UserConnector(Runner& runner, const ConfigType& config)
-        :
-        m_runner(runner),
-        m_client(runner.GetClient()),
-        m_logger(runner.GetUserLogger()),
-        m_account_id(config["user"]["account_id"].as<std::string>()),
-        m_instrument(runner.GetInstrument()) {}
+    : m_runner(runner),
+      m_client(runner.GetClient()),
+      m_logger(runner.GetLogger("runner", false)),
+      m_our_trades_logger(runner.GetLogger("our_trades", true)),
+      m_positions_logger(runner.GetLogger("positions", true)),
+      m_orders_logger(runner.GetLogger("orders", true)),
+      m_account_id(config["user"]["account_id"].as<std::string>()),
+      m_instrument(runner.GetInstrument()) {
+    m_our_trades_logger->info("internal_log_id,strategy_time,direction,order_id,executed_qty,px");
+    m_positions_logger->info("internal_log_id,strategy_time,qty,money");
+    m_orders_logger->info("internal_log_id,strategy_time,order_id,direction,px,qty");
+}
 
 const Positions& UserConnector::GetPositions() const {
     return m_positions;
@@ -58,13 +63,14 @@ void UserConnector::Start() {
         m_positions.money = 0;
     } else {
         m_positions.money = m_instrument.MoneyValueToPx(money_positions[0]);
+        assert(m_positions.money >= 0);
     }
 
     // Parse Money blocked positions
     // TODO: add cancel orders
     if (!positions->blocked().empty()) {
         m_logger->error("Blocked money positions ({}): ", positions->blocked().size());
-        for (const MoneyValue& blocked_positions: positions->blocked()) {
+        for (const MoneyValue& blocked_positions : positions->blocked()) {
             m_logger->error("currency={} MoneyValue={}.{}", blocked_positions.currency(), blocked_positions.units(), blocked_positions.nano());
         }
         assert(false && "Cancel Buy orders!");
@@ -83,9 +89,8 @@ void UserConnector::Start() {
     // Subscribe OrderStream
     m_orders_stream = std::dynamic_pointer_cast<OrdersStream>(m_client.service("ordersstream"));
     m_orders_stream->TradesStreamAsync(
-            {m_account_id},
-            [this](ServiceReply reply) { OrderStreamCallback(ParseReply<TradesStreamResponse>(reply, m_logger)); }
-    );
+        {m_account_id},
+        [this](ServiceReply reply) { OrderStreamCallback(ParseReply<TradesStreamResponse>(reply, m_logger)); });
 
     // Create orders service
     m_orders_service = std::dynamic_pointer_cast<Orders>(m_client.service("orders"));
@@ -97,18 +102,18 @@ void UserConnector::Start() {
 
 const LimitOrder& UserConnector::PostOrder(int px, int qty, Direction direction) {
     // Convert px to Tinkoff API px
-    auto[units, nano] = m_instrument.PxToQuotation(px);
+    auto [units, nano] = m_instrument.PxToQuotation(px);
     // Send request
     m_logger->info("PostOrder: {} qty={}, px={}.{} ({})", direction, qty, units, nano, px);
     ServiceReply reply = m_orders_service->PostOrder(
-            m_instrument.figi,
-            qty,
-            units,
-            nano,
-            direction == Direction::Buy ? OrderDirection::ORDER_DIRECTION_BUY : OrderDirection::ORDER_DIRECTION_SELL,
-            m_account_id,
-            OrderType::ORDER_TYPE_LIMIT,  // only limit orders are supported
-            ""  // empty idempotency key
+        m_instrument.figi,
+        qty,
+        units,
+        nano,
+        direction == Direction::Buy ? OrderDirection::ORDER_DIRECTION_BUY : OrderDirection::ORDER_DIRECTION_SELL,
+        m_account_id,
+        OrderType::ORDER_TYPE_LIMIT,  // only limit orders are supported
+        ""                            // empty idempotency key
     );
     auto response = ParseReply<PostOrderResponse>(reply, m_logger);
     m_logger->info("PostOrder success");
@@ -143,17 +148,18 @@ void UserConnector::CancelOrder(const std::string& order_id) {
     auto it = m_positions.orders.find(order_id);
     assert(it != m_positions.orders.end());
     // Send request
-    m_logger->info("[UserConnector] CancelOrder order_id={} {} qty={}, px={}", order_id, it->second.direction, it->second.qty, it->second.px * m_instrument.px_step);
+    m_logger->info("CancelOrder order_id={} {} qty={}, px={}", order_id, it->second.direction, it->second.qty, it->second.px * m_instrument.px_step);
     ServiceReply reply = m_orders_service->CancelOrder(
-            m_account_id,
-            order_id
-    );
+        m_account_id,
+        order_id);
     // Remove the order anyway
     m_positions.orders.erase(it);
 
     auto response = ParseReply<CancelOrderResponse>(reply, m_logger);
-    m_logger->info("[UserConnector] CancelOrder success");
     // TODO: parse response->time()
+    // Log Orders
+    LogOrders();
+    m_logger->info("CancelOrder success");
 }
 
 void UserConnector::OrderStreamCallback(TradesStreamResponse* response) {
@@ -175,11 +181,11 @@ void UserConnector::OrderStreamCallback(TradesStreamResponse* response) {
         assert(!trades.empty());
         const int px = m_instrument.QuotationToPx(trades[0].price());
         int executed_qty = 0;
-        for (const OrderTrade& trade: trades) {
+        for (const OrderTrade& trade : trades) {
             // TODO: parse time and trade_id
             assert(m_instrument.QuotationToPx(trade.price()) == px);
             assert(trade.quantity() % m_instrument.lot_size == 0);
-            executed_qty += m_instrument.QtyToLots(trade.quantity()); // convert to lots
+            executed_qty += m_instrument.QtyToLots(trade.quantity());  // convert to lots
         }
 
         ProcessOurTrade(lock, order_id, px, executed_qty, direction == OrderDirection::ORDER_DIRECTION_BUY ? Direction::Buy : Direction::Sell);
@@ -190,6 +196,9 @@ void UserConnector::OrderStreamCallback(TradesStreamResponse* response) {
 }
 
 void UserConnector::ProcessOurTrade(const LockGuard& lock, const std::string& order_id, int px, int executed_qty, Direction direction) {
+    // Log OurTrade
+    TimeType t = current_time();
+    m_our_trades_logger->info("{},{},{},{},{},{}", internal_log_id, t, direction, order_id, executed_qty, px);
     m_logger->info("OurTrade: {} order_id={}, qty={}, px={}", direction, order_id, executed_qty, px);
     // Find order
     auto it = m_positions.orders.find(order_id);
@@ -200,7 +209,7 @@ void UserConnector::ProcessOurTrade(const LockGuard& lock, const std::string& or
     } else {
         LimitOrder& order = it->second;
         // Do sanity check
-//        assert(order.px == px && "Px mismatch");
+        assert(order.px == px && "Px mismatch");
         assert(order.direction == direction && "Direction mismatch");
         assert(executed_qty <= order.qty && "More qty was executed than order contains");
         // Remove qty
@@ -212,17 +221,17 @@ void UserConnector::ProcessOurTrade(const LockGuard& lock, const std::string& or
     m_positions.money -= signed_qty * px;
 
     // Copy order information
-    LimitOrder order = order_exists ? it->second : LimitOrder {
-            .order_id = order_id,
-            .direction = direction,
-            .px = px,
-            .qty = 0
-    };
+    LimitOrder order = order_exists ? it->second : LimitOrder{.order_id = order_id, .direction = direction, .px = px, .qty = 0};
 
     // Remove empty order before strategy notification
     if (it != m_positions.orders.end() && it->second.qty == 0) {
         m_positions.orders.erase(it);
     }
+
+    // Log positions after update
+    m_positions_logger->info("{},{},{},{}", internal_log_id, current_time(), m_positions.qty, m_positions.money);
+    // Log Orders
+    LogOrders();
 
     // Notify strategy (lock all other events)
     m_runner.OnOurTrade(order, executed_qty);
@@ -232,15 +241,15 @@ const LimitOrder& UserConnector::ProcessNewPostOrder(const std::string& order_id
     assert(!m_positions.orders.contains(order_id));
     // Add order to current orders
     auto it = m_positions.orders.emplace(
-            order_id,
-            LimitOrder {
-                    .order_id = order_id,
-                    .direction = direction,
-                    .px = px,
-                    .qty = qty
-            }
-    );
+        order_id,
+        LimitOrder{
+            .order_id = order_id,
+            .direction = direction,
+            .px = px,
+            .qty = qty});
     const LimitOrder& new_order = it.first->second;
+    // Log Orders
+    LogOrders();
     m_logger->info("New order is placed: {}", new_order);
     return new_order;
 }
@@ -248,4 +257,12 @@ const LimitOrder& UserConnector::ProcessNewPostOrder(const std::string& order_id
 bool UserConnector::IsReady() const {
     // TODO: remove
     return m_is_order_stream_ready;
+}
+
+void UserConnector::LogOrders() {
+    for (const auto& [order_id, limit_order] : m_positions.orders) {
+        assert(order_id == limit_order.order_id);
+        m_orders_logger->info("{},{},{},{},{},{}", internal_log_id, current_time(), order_id, limit_order.direction, limit_order.px, limit_order.qty);
+    }
+    ++internal_log_id; // increment internal log id
 }

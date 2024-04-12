@@ -1,13 +1,14 @@
 #pragma once
 
-#include <spdlog/spdlog.h>
 #include <spdlog/fmt/ostr.h>
+#include <spdlog/spdlog.h>
 
+#include <ctime>
+
+#include "connector/utils.h"
+#include "constants.h"
 #include "hft_library/third_party/TinkoffInvestSDK/investapiclient.h"
 #include "hft_library/third_party/TinkoffInvestSDK/services/marketdatastreamservice.h"
-
-#include "constants.h"
-#include "connector/utils.h"
 
 class Runner;
 
@@ -17,7 +18,7 @@ class MarketOrderBook;
 
 template <bool IsBidParameter>
 class OneSideMarketOrderBook {
-public:
+   public:
     // bid[0], ask[0] => best bid/ask
     // px = real_px / px_step
     // qty = real_qty / lot_size
@@ -40,71 +41,73 @@ public:
         }
     }
 
-private:
+   private:
     friend MarketOrderBook;
 };
 
 class MarketOrderBook {
-public:
+   public:
+    TimeType time;
     OneSideMarketOrderBook<true> bid;
     OneSideMarketOrderBook<false> ask;
 
     int depth;
 
-private:
+   private:
     const Instrument& m_instrument;
 
-public:
+   public:
     MarketOrderBook(const Instrument& instrument, int depth);
 
     template <bool IsBid>
     OneSideMarketOrderBook<IsBid>& GetOneSideOrderBook();
 
-private:
+   private:
     friend class MarketConnector;
 
     template <bool IsBid>
     void Update(const int* px, const int* qty);
 };
 
-
 struct MarketTrade {
+    TimeType time;
     Direction direction;
-    int px; // real_px / px_step
-    int qty; // in lots
+    int px;   // real_px / px_step
+    int qty;  // in lots
 };
 
 class Trades {
-public:
+   public:
     // TODO: add last n trades tracking
     bool has_trade = false;
-    MarketTrade last_trade = {Direction::Buy, 0, 0};
+    MarketTrade last_trade = {0, Direction::Buy, 0, 0};
 
-private:
+   private:
     const Instrument& m_instrument;
 
-public:
+   public:
     Trades(const Instrument& instrument);
 
-private:
+   private:
     friend class MarketConnector;
 
-    void Update(Direction direction, int px, int qty);
+    void Update(TimeType time, Direction direction, int px, int qty);
 };
 
 std::ostream& operator<<(std::ostream& os, const Trades& trades);
 
 std::ostream& operator<<(std::ostream& os, const MarketOrderBook& ob);
 
-
 class MarketConnector {
-private:
+   private:
     // Runner
     Runner& m_runner;
     // Client
     InvestApiClient& m_client;
     // Logger
     std::shared_ptr<spdlog::logger> m_logger;
+    std::shared_ptr<spdlog::logger> m_trades_logger;
+    std::shared_ptr<spdlog::logger> m_orderbook_logger;
     // Instrument
     const Instrument& m_instrument;
 
@@ -119,7 +122,8 @@ private:
     MarketOrderBook m_order_book;
     // Trades
     Trades m_trades;
-public:
+
+   public:
     MarketConnector(Runner& runner, const ConfigType& config);
 
     // Getters
@@ -127,7 +131,7 @@ public:
 
     const Trades& GetTrades() const;
 
-private:
+   private:
     // Methods for Runner
     friend class Runner;
 

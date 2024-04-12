@@ -1,8 +1,11 @@
 #include <deque>
+#include <filesystem>
 
 #include "config.h"
 #include "runner.h"
 #include "strategy.h"
+
+struct TargetQuotesValidator;
 
 class GridTrading : public Strategy {
    private:
@@ -18,14 +21,16 @@ class GridTrading : public Strategy {
         Level(int px, int qty) : px(px), qty(qty) {}
     };
 
+    std::shared_ptr<spdlog::logger> m_target_bid_ask_logger;
     std::deque<Level> target_bids;
     std::deque<Level> target_asks;
     int bids_asks_qty_sum = 0;
 
     friend std::ostream& operator<<(std::ostream& out, const std::deque<Level>& target_quotes) {
-        out << target_quotes.size() << " quotes: ";
+        // target_quote.size(),px_1,qty_1,...,px_n,qty_n
+        out << target_quotes.size();
         for (const Level& level : target_quotes) {
-            out << "| px=" << level.px << ",qty=" << level.qty << " ";
+            out << ";" << level.px << ";" << level.qty;
         }
         return out;
     }
@@ -36,10 +41,13 @@ class GridTrading : public Strategy {
           max_levels(config["max_levels"].as<int>()),
           order_size(config["order_size"].as<int>()),
           spread(config["spread"].as<int>()),
-          debug(config["debug"].as<bool>()) {
+          debug(config["debug"].as<bool>()),
+          m_target_bid_ask_logger(m_runner.GetLogger("target_bid_ask", true)) {
         assert(spread >= 2);
         m_logger->info("spread = {}; order_size = {};  max_levels = {}; debug = {}", spread, order_size, max_levels, debug);
+        m_target_bid_ask_logger->info("when,strategy_time,msg,bid_count;bid_px;bid_qty,ask_count;ask_px;ask_qty");
     }
+    friend struct TargetQuotesValidator;
 
    private:
     // Utils
@@ -63,36 +71,11 @@ class GridTrading : public Strategy {
 
     bool CheckEventsPending(const std::string& msg) {
         if (m_runner.GetPendingEvents() >= 1) {
-            m_logger->warn("Break {}: {} events pending", msg, m_runner.GetPendingEvents());
+            m_logger->info("Break {}: {} events pending", msg, m_runner.GetPendingEvents());
             return true;
         }
         return false;
     }
-
-    // Quotes Validator
-    struct TargetQuotesValidator {
-        GridTrading& s;
-        std::string msg;
-        bool final_validate;
-        TargetQuotesValidator(GridTrading& s, std::string msg, bool initial_validate = true, bool final_validate = true)
-            : s(s),
-              msg(std::move(msg)),
-              final_validate(final_validate) {
-            s.m_logger->info("Before: {}", this->msg);
-            s.LogTargetQuotes();
-            if (initial_validate) {
-                s.ValidateTargetQuotes();
-            }
-        }
-        ~TargetQuotesValidator() {
-            s.m_logger->info("After: {}", msg);
-            s.LogTargetQuotes();
-            if (final_validate) {
-                s.ValidateTargetQuotes();
-            }
-        }
-    };
-    friend struct TargetQuotesValidator;
 
     void ValidateTargetQuotes() {
         // One of the arrays is not empty
@@ -128,15 +111,11 @@ class GridTrading : public Strategy {
         }
     }
 
-    void LogTargetQuotes() {
-        m_logger->info("target_bids {}", target_bids);
-        m_logger->info("target_asks {}", target_asks);
-    }
-
     // Quotes Updates
     template <bool IsBid>
-    void InitializeTargetQuotes(bool validate) {
-        TargetQuotesValidator v(*this, std::string("InitializeTargetQuotes(") + (IsBid ? "bid)" : "ask)"), false, validate);
+    void InitializeTargetQuotes(bool final_validate) {
+        const std::string msg = fmt::to_string(fmt::format("InitializeTargetQuotes({})", (IsBid ? "bid" : "ask")));
+        TargetQuotesValidator v(*this, msg, false, final_validate);
         constexpr int sign = Sign<IsBid>();
         int start_px = m_order_book.bid.px[0] - (spread - 1) / 2;
         if constexpr (!IsBid) {
@@ -145,7 +124,7 @@ class GridTrading : public Strategy {
         std::deque<Level>& bids = IsBid ? target_bids : target_asks;
         // TODO: dynamically determine maximum qty
         int max_post_qty = IsBid ? m_positions.money / m_order_book.bid.px[0] : m_positions.qty;
-        m_logger->trace("max_post_qty={} IsBid={}", max_post_qty, IsBid);
+        m_logger->info("{}: max_post_qty={}", msg, max_post_qty);
         int curr_qty = 0;
         for (int i = 0; i < max_post_qty; ++i) {
             int new_qty = std::min(max_post_qty - curr_qty, order_size);
@@ -160,7 +139,8 @@ class GridTrading : public Strategy {
 
     template <bool IsBid>
     void UpdateTargetQuotesOnPriceChange() {
-        TargetQuotesValidator v(*this, std::string("UpdateTargetQuotesOnPriceChange(") + (IsBid ? "bid)" : "ask)"));
+        const std::string msg = fmt::to_string(fmt::format("UpdateTargetQuotesOnPriceChange({})", (IsBid ? "bid" : "ask")));
+        TargetQuotesValidator v(*this, std::move(msg));
         // We only have money -> increase the curr_bid_px
         // bid = best_bid - spread
         // We only have the asset -> decrease the curr_bid_px
@@ -180,7 +160,8 @@ class GridTrading : public Strategy {
     template <bool IsBid>
     void UpdateTargetQuotesOnExecution(int executed_px, int executed_qty) {
         // IsBid = true -> executed_qty from bids
-        TargetQuotesValidator v(*this, std::string("UpdateTargetQuotesOnExecution(px=") + std::to_string(executed_px) + ", qty=" + std::to_string(executed_qty) + ", " + (IsBid ? "bid)" : "ask)"));
+        const std::string msg = fmt::to_string(fmt::format("UpdateTargetQuotesOnExecution({}; px={}; qty={})", (IsBid ? "bid" : "ask"), executed_px, executed_qty));
+        TargetQuotesValidator v(*this, msg);
         std::deque<Level>& bids = IsBid ? target_bids : target_asks;
         std::deque<Level>& asks = IsBid ? target_asks : target_bids;
         constexpr int sign = Sign<IsBid>();
@@ -256,13 +237,13 @@ class GridTrading : public Strategy {
         for (const std::string& order_id : cancel_order_ids) {
             try {
                 const LimitOrder& order = m_positions.orders.at(order_id);
+                m_logger->info("CancelOrder(order_id={}); order={}", order_id, order);
                 if (!debug) {
                     m_runner.CancelOrder(order_id);
-                } else {
-                    m_logger->info("[DEBUG] CancelOrder({}) - {}", order_id, order);
                 }
             } catch (const ServiceReply& reply) {
-                m_logger->warn("Could not cancel the order (possible execution)");
+                m_logger->warn("Could not cancel the order (possible execution). Break posting orders");
+                return;
             }
             if (CheckEventsPending("Cancel Orders")) {
                 return;
@@ -277,13 +258,13 @@ class GridTrading : public Strategy {
             assert(place_qty <= order_size);
             if (place_qty > 0) {
                 try {
+                    m_logger->info("PostOrder(px={}, qty={}, direction={})", px, place_qty, direction);
                     if (!debug) {
                         m_runner.PostOrder(px, place_qty, direction);
-                    } else {
-                        m_logger->info("[DEBUG] PostOrder(px={}, qty={}, direction={})", px, place_qty, direction);
                     }
                 } catch (const ServiceReply& reply) {
-                    m_logger->warn("Could not post the order");
+                    m_logger->warn("Could not post the order. Break posting orders");
+                    return true;  // Signal to stop the iteration
                 }
                 if (CheckEventsPending("Post Orders")) {
                     return true;  // Signal to stop the iteration
@@ -346,8 +327,7 @@ class GridTrading : public Strategy {
 
     void OnOurTrade(const LimitOrder& order, int executed_qty) override {
         m_logger->info("Execution: qty={} on order={}", executed_qty, order);
-        m_logger->info("Money: {}; Qty: {}; Orders: {}", m_positions.money, m_positions.qty, m_positions.orders.size());
-        m_logger->info("Positions: {}", m_positions);
+        m_logger->info("money={}; qty={}; n_orders={}", m_positions.money, m_positions.qty, m_positions.orders.size());
         if (order.direction == Direction::Buy) {
             UpdateTargetQuotesOnExecution<true>(order.px, executed_qty);
         } else {
@@ -359,6 +339,7 @@ class GridTrading : public Strategy {
 
 int main() {
     auto config = read_config();
+    std::filesystem::create_directory(config["runner"]["log_directory"].as<std::string>());
 
     Runner::StrategyGetter strategy_getter = [](Runner& runner) {
         return std::make_shared<GridTrading>(runner, runner.GetConfig()["strategy"]);
@@ -372,3 +353,23 @@ int main() {
     std::cout << "Exit 0" << std::endl;
     return 0;
 }
+
+// Quotes Validator
+struct TargetQuotesValidator {
+    GridTrading& s;
+    std::string msg;
+    bool final_validate;
+    TargetQuotesValidator(GridTrading& s, std::string msg, bool initial_validate = true, bool final_validate = true)
+        : s(s), msg(std::move(msg)), final_validate(final_validate) {
+        s.m_target_bid_ask_logger->info("before,{},{},{},{}", current_time(), this->msg, s.target_bids, s.target_asks);
+        if (initial_validate) {
+            s.ValidateTargetQuotes();
+        }
+    }
+    ~TargetQuotesValidator() {
+        s.m_target_bid_ask_logger->info("after,{},{},{},{}", current_time(), this->msg, s.target_bids, s.target_asks);
+        if (final_validate) {
+            s.ValidateTargetQuotes();
+        }
+    }
+};

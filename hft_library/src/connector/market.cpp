@@ -1,18 +1,20 @@
 #include "connector/market.h"
-#include "runner.h"
 
+#include <ctime>
 #include <iomanip>
 #include <iostream>
+
+#include "connector/utils.h"
+#include "runner.h"
 
 template <bool IsBidParameter>
 OneSideMarketOrderBook<IsBidParameter>::OneSideMarketOrderBook(int depth) : depth(depth) {}
 
 MarketOrderBook::MarketOrderBook(const Instrument& instrument, int depth)
-        :
-        bid(depth),
-        ask(depth),
-        m_instrument(instrument),
-        depth(depth) {
+    : bid(depth),
+      ask(depth),
+      m_instrument(instrument),
+      depth(depth) {
     assert(depth >= 1);
     assert(depth <= MAX_DEPTH);
 }
@@ -56,7 +58,7 @@ void MarketOrderBook::Update(const int* px, const int* qty) {
     OneSideMarketOrderBook<IsBidParameter>& order_book = GetOneSideOrderBook<IsBidParameter>();
     for (int i = 0; i < depth; ++i) {
         order_book.px[i] = px[i];
-        order_book.qty[i] = qty[i]; // already in lots
+        order_book.qty[i] = qty[i];  // already in lots
     }
 }
 
@@ -64,10 +66,11 @@ Trades::Trades(Instrument const& instrument) : m_instrument(instrument) {}
 
 std::ostream& operator<<(std::ostream& os, const Trades& trades) {
     if (!trades.has_trade) {
-        os << "No trades yet\n";
+        os << "No trades yet";
         return os;
     }
     os << "Trade: "
+       << trades.last_trade.time << "  "
        << trades.last_trade.direction << "  "
        << '['
        << std::setw(NUMBER_OF_SPACES_PER_NUMBER) << trades.last_trade.px << "  "
@@ -76,23 +79,31 @@ std::ostream& operator<<(std::ostream& os, const Trades& trades) {
     return os;
 }
 
-void Trades::Update(Direction direction, int px, int qty) {
+void Trades::Update(TimeType time, Direction direction, int px, int qty) {
     this->has_trade = true;
     this->last_trade = MarketTrade{
-            .direction = direction,
-            .px = px,
-            .qty = qty
-    };
+        .time = time,
+        .direction = direction,
+        .px = px,
+        .qty = qty};
 }
 
 MarketConnector::MarketConnector(Runner& runner, const ConfigType& config)
-        :
-        m_runner(runner),
-        m_client(runner.GetClient()),
-        m_logger(runner.GetMarketLogger()),
-        m_instrument(runner.GetInstrument()),
-        m_order_book(m_instrument, config["market"]["depth"].as<int>()),
-        m_trades(m_instrument) {}
+    : m_runner(runner),
+      m_client(runner.GetClient()),
+      m_logger(runner.GetLogger("market", false)),
+      m_trades_logger(runner.GetLogger("trades", true)),
+      m_orderbook_logger(runner.GetLogger("orderbook", true)),
+      m_instrument(runner.GetInstrument()),
+      m_order_book(m_instrument, config["market"]["depth"].as<int>()),
+      m_trades(m_instrument) {
+    m_trades_logger->info("strategy_time,exchange_time,direction,px,qty");
+    std::string order_book_header = "strategy_time,exchange_time";
+    for (size_t i = 0; i < m_order_book.depth; ++i) {
+        order_book_header += fmt::format(",bid_px_{},bid_qty_{},ask_px_{},ask_qty_{}", i, i, i, i);
+    }
+    m_orderbook_logger->info(order_book_header);
+}
 
 const MarketOrderBook& MarketConnector::GetOrderBook() const { return m_order_book; }
 
@@ -106,20 +117,18 @@ void MarketConnector::Start() {
 
     // Subscribe OrderBookStream
     m_market_data_stream->SubscribeOrderBookAsync(
-            {m_instrument.figi},
-            m_order_book.depth,
-            [this](ServiceReply reply) {
-                this->OrderBookStreamCallBack(ParseReply<MarketDataResponse>(reply, m_logger));
-            }
-    );
+        {m_instrument.figi},
+        m_order_book.depth,
+        [this](ServiceReply reply) {
+            this->OrderBookStreamCallBack(ParseReply<MarketDataResponse>(reply, m_logger));
+        });
 
     // Subscribe TradeStream
     m_market_data_stream->SubscribeTradesAsync(
-            {m_instrument.figi},
-            [this](ServiceReply reply) {
-                this->TradeStreamCallBack(ParseReply<MarketDataResponse>(reply, m_logger));
-            }
-    );
+        {m_instrument.figi},
+        [this](ServiceReply reply) {
+            this->TradeStreamCallBack(ParseReply<MarketDataResponse>(reply, m_logger));
+        });
 }
 
 void MarketConnector::OrderBookStreamCallBack(MarketDataResponse* response) {
@@ -140,6 +149,7 @@ void MarketConnector::OrderBookStreamCallBack(MarketDataResponse* response) {
         // Parse bids and asks
         int px[MAX_DEPTH];
         int qty[MAX_DEPTH];
+        m_order_book.time = time_from_protobuf(order_book.time());
 
         ParseLevels(order_book.bids(), px, qty);
         m_order_book.Update<true>(px, qty);
@@ -148,6 +158,14 @@ void MarketConnector::OrderBookStreamCallBack(MarketDataResponse* response) {
         m_order_book.Update<false>(px, qty);
 
         assert(m_order_book.bid.px[0] < m_order_book.ask.px[0]);
+
+        // Log the order book data
+        fmt::memory_buffer buf;
+        fmt::format_to(std::back_inserter(buf), "{},{}", current_time(), m_order_book.time);
+        for (size_t i = 0; i < m_order_book.depth; ++i) {
+            fmt::format_to(std::back_inserter(buf), ",{},{},{},{}", m_order_book.bid.px[i], m_order_book.bid.qty[i], m_order_book.ask.px[i], m_order_book.ask.qty[i]);
+        }
+        m_orderbook_logger->info("{}", fmt::to_string(buf));
 
         if (!m_is_order_book_stream_ready) {
             // Notify strategy about connector readiness
@@ -158,7 +176,7 @@ void MarketConnector::OrderBookStreamCallBack(MarketDataResponse* response) {
             if (lock.NotifyNow()) {
                 m_runner.OnOrderBookUpdate();
             } else {
-                m_logger->warn("Skip OrderBook notification: {} events pending", lock.GetNumberEventsPending());
+                m_logger->info("Skip OrderBook notification: {} events pending", lock.GetNumberEventsPending());
             }
         }
     } else {
@@ -188,16 +206,17 @@ void MarketConnector::TradeStreamCallBack(MarketDataResponse* response) {
         const int direction = trade.direction();
         assert(direction == TradeDirection::TRADE_DIRECTION_BUY || direction == TradeDirection::TRADE_DIRECTION_SELL);
         m_trades.Update(
-                direction == TradeDirection::TRADE_DIRECTION_BUY ? Direction::Buy : Direction::Sell,
-                m_instrument.QuotationToPx(trade.price()),
-                static_cast<int>(trade.quantity())
-        );
+            time_from_protobuf(trade.time()),
+            direction == TradeDirection::TRADE_DIRECTION_BUY ? Direction::Buy : Direction::Sell,
+            m_instrument.QuotationToPx(trade.price()),
+            static_cast<int>(trade.quantity()));
+        m_trades_logger->info("{},{},{},{},{}", current_time(), m_trades.last_trade.time, m_trades.last_trade.direction, m_trades.last_trade.px, m_trades.last_trade.qty);
 
         // Notify strategy
         if (lock.NotifyNow()) {
             m_runner.OnTradesUpdate();
         } else {
-            m_logger->warn("Skip Trades notification: {} events pending", lock.GetNumberEventsPending());
+            m_logger->info("Skip Trades notification: {} events pending", lock.GetNumberEventsPending());
         }
     } else {
         // Process ping

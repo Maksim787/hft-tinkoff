@@ -4,7 +4,7 @@
 Strategy::Strategy(Runner& runner)
         :
         m_runner(runner),
-        m_logger(runner.GetStrategyLogger()),
+        m_logger(runner.GetLogger("strategy", false)),
         m_config(runner.GetConfig()),
         m_instrument(runner.GetInstrument()),
         m_order_book(runner.GetMarketConnector().GetOrderBook()),

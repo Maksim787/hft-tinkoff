@@ -1,48 +1,45 @@
 #pragma once
 
+#include <spdlog/fmt/ostr.h>
+#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/spdlog.h>
+
 #include <functional>
 #include <mutex>
 
-#include <spdlog/spdlog.h>
-#include <spdlog/fmt/ostr.h>
-#include <spdlog/sinks/basic_file_sink.h>
-
-#include "strategy.h"
 #include "config.h"
-#include "connector/utils.h"
-#include "connector/user.h"
 #include "connector/market.h"
-
+#include "connector/user.h"
+#include "connector/utils.h"
+#include "strategy.h"
 
 class Runner;
 
 // Synchronization
 class LockGuard {
     Runner& m_runner;
-public:
+
+   public:
     bool NotifyNow() const;
 
     int GetNumberEventsPending() const;
 
     ~LockGuard();
 
-private:
+   private:
     LockGuard(Runner& runner);
 
     friend class Runner;
 };
 
 class Runner {
-private:
+   private:
     // Config
     ConfigType m_config;
 
-    // Logger
-    std::shared_ptr<spdlog::sinks::basic_file_sink_mt> m_file_sink;
+    // Loggers
+    std::map<std::string, std::shared_ptr<spdlog::logger>> m_loggers;
     std::shared_ptr<spdlog::logger> m_runner_logger;
-    std::shared_ptr<spdlog::logger> m_mkt_logger;
-    std::shared_ptr<spdlog::logger> m_usr_logger;
-    std::shared_ptr<spdlog::logger> m_strategy_logger;
 
     // Client for connectors
     InvestApiClient m_client;
@@ -62,9 +59,9 @@ private:
     bool m_is_usr_ready = false;
 
     // Strategy
-    std::shared_ptr<Strategy> m_strategy; // Strategy is an abstract class
+    std::shared_ptr<Strategy> m_strategy;  // Strategy is an abstract class
 
-public:
+   public:
     using StrategyGetter = std::function<std::shared_ptr<Strategy>(Runner&)>;
 
     Runner(const ConfigType& config, const StrategyGetter& strategy_getter);
@@ -81,7 +78,7 @@ public:
 
     UserConnector& GetUserConnector();
 
-    std::shared_ptr<spdlog::logger> GetStrategyLogger();
+    std::shared_ptr<spdlog::logger> GetLogger(const std::string& name, bool only_text);
 
     int GetPendingEvents() const;
 
@@ -90,17 +87,13 @@ public:
 
     void CancelOrder(const std::string& order_id);
 
-private:
+   private:
     friend class MarketConnector;
 
     friend class LockGuard;
 
     // Getters for MarketConnector and UserConnector
     InvestApiClient& GetClient();
-
-    std::shared_ptr<spdlog::logger> GetMarketLogger();
-
-    std::shared_ptr<spdlog::logger> GetUserLogger();
 
     // Methods for synchronization
     LockGuard GetEventLock();

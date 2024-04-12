@@ -1,35 +1,25 @@
-#include <spdlog/spdlog.h>
+#include "runner.h"
+
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_sinks.h>
+#include <spdlog/spdlog.h>
 
-#include "runner.h"
+#include <filesystem>
+
 #include "constants.h"
 
 Runner::Runner(const ConfigType& config, const StrategyGetter& strategy_getter)
-        :
-        m_config(config),
-        m_file_sink(std::make_shared<spdlog::sinks::basic_file_sink_mt>(config["runner"]["log_file"].as<std::string>(), false)),
-        m_runner_logger(std::make_shared<spdlog::logger>("Runner", spdlog::sinks_init_list{m_file_sink, std::make_shared<spdlog::sinks::stdout_sink_mt>()})),
-        m_mkt_logger(std::make_shared<spdlog::logger>("Market", spdlog::sinks_init_list{m_file_sink, std::make_shared<spdlog::sinks::stdout_sink_mt>()})),
-        m_usr_logger(std::make_shared<spdlog::logger>("User", spdlog::sinks_init_list{m_file_sink, std::make_shared<spdlog::sinks::stdout_sink_mt>()})),
-        m_strategy_logger(std::make_shared<spdlog::logger>("Strategy", spdlog::sinks_init_list{m_file_sink, std::make_shared<spdlog::sinks::stdout_sink_mt>()})),
-        m_client(ENDPOINT, config["runner"]["token"].as<std::string>()),
-        // TODO: Get/Check instrument information in RunTime
-        m_instrument(
-                config["runner"]["figi"].as<std::string>(),
-                config["runner"]["lot_size"].as<int>(),
-                config["runner"]["px_step"].as<double>()
-        ),
-        m_mkt(*this, config),
-        m_usr(*this, config),
-        m_strategy(strategy_getter(*this)) {
-    // Configure loggers
-    for (std::shared_ptr<spdlog::logger> logger: {m_runner_logger, m_mkt_logger, m_usr_logger, m_strategy_logger}) {
-        logger->set_level(spdlog::level::trace);
-        logger->flush_on(spdlog::level::trace);
-        spdlog::register_logger(logger);
-    }
-}
+    : m_config(config),
+      m_runner_logger(GetLogger("runner", false)),
+      m_client(ENDPOINT, config["runner"]["token"].as<std::string>()),
+      // TODO: Get/Check instrument information in RunTime
+      m_instrument(
+          config["runner"]["figi"].as<std::string>(),
+          config["runner"]["lot_size"].as<int>(),
+          config["runner"]["px_step"].as<double>()),
+      m_mkt(*this, config),
+      m_usr(*this, config),
+      m_strategy(strategy_getter(*this)) {}
 
 void Runner::Start() {
     m_runner_logger->info(std::string(50, '='));
@@ -57,16 +47,27 @@ InvestApiClient& Runner::GetClient() {
     return m_client;
 }
 
-std::shared_ptr<spdlog::logger> Runner::GetMarketLogger() {
-    return m_mkt_logger;
-}
-
-std::shared_ptr<spdlog::logger> Runner::GetUserLogger() {
-    return m_usr_logger;
-}
-
-std::shared_ptr<spdlog::logger> Runner::GetStrategyLogger() {
-    return m_strategy_logger;
+std::shared_ptr<spdlog::logger> Runner::GetLogger(const std::string& name, bool only_text) {
+    auto it = m_loggers.find(name);
+    if (it != m_loggers.end()) {
+        // Logger exists
+        return it->second;
+    }
+    // Create file
+    auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(std::filesystem::path(m_config["runner"]["log_directory"].as<std::string>()) / (name + ".txt"), false);
+    if (only_text) {
+        file_sink->set_pattern("%v");
+    }
+    // Create logger
+    auto logger = std::make_shared<spdlog::logger>(name, only_text ? spdlog::sinks_init_list{file_sink} : spdlog::sinks_init_list{file_sink, std::make_shared<spdlog::sinks::stdout_sink_mt>()});
+    // Configure logger
+    logger->set_level(spdlog::level::trace);
+    logger->flush_on(spdlog::level::trace);
+    spdlog::register_logger(logger);
+    // Store logger
+    m_loggers[name] = logger;
+    // Return logger
+    return logger;
 }
 
 int Runner::GetPendingEvents() const {

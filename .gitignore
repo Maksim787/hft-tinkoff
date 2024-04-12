@@ -5,6 +5,8 @@ cache/
 private/
 log/
 server_logs/
+previous_logs/
+tmp/
 
 scripts/venv/
 scripts/cache/
@@ -12,6 +14,7 @@ scripts/cache/
 old.py
 tmp.py
 *_logs.txt
+tmp.txt
 
 output.txt
 

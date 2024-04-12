@@ -99,8 +99,8 @@ set(GRPC_FETCHCONTENT false)
 
 # Build project
 cd hft-tinkoff/
-mkdir cmake-build-debug
-cd cmake-build-debug
+mkdir build
+cd build
 cmake -DCMAKE_BUILD_TYPE=Debug ..
 cmake --build .
 
@@ -111,8 +111,8 @@ rm -rf grpc/
 
 
 tmux new -s hft
-cd scripts/
-python scripts/server/launch_server.py | tee -a scripts/server/launcher_logs.txt
+python scripts/server/launch_server.py | tee -i -a log/launcher_logs.txt
+rm log/*
 
 scp hft@158.160.122.142:~/hft-tinkoff/log/log.txt ~/HFT/hft-tinkoff/server_logs/
 scp hft@158.160.122.142:~/hft-tinkoff/scripts/server/bot_logs.txt ~/HFT/hft-tinkoff/server_logs/

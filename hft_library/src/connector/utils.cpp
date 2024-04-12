@@ -17,7 +17,7 @@ int DoublePxToInt(double px, double px_step, double precision, bool check_errors
         // assert(std::abs(floating_part) < precision);
         assert(std::abs(floating_part) < 0.02); // TODO: use precision
     }
-    return static_cast<int>(int_part);
+    return static_cast<int>(int_part + 0.01); // TODO: use precision
 }
 
 int Instrument::QtyToLots(int qty) const {
@@ -63,4 +63,16 @@ std::ostream& operator<<(std::ostream& os, Direction direction) {
             assert(false);
     }
     return os;
+}
+
+TimeType time_from_protobuf(const google::protobuf::Timestamp& timestamp) {
+    auto seconds = std::chrono::seconds(timestamp.seconds());
+    auto nanoseconds = std::chrono::nanoseconds(timestamp.nanos());
+    auto duration_since_epoch = std::chrono::system_clock::time_point(seconds + nanoseconds).time_since_epoch();
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(duration_since_epoch).count();
+}
+
+TimeType current_time() {
+    auto duration_since_epoch = std::chrono::system_clock::now().time_since_epoch();
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(duration_since_epoch).count();
 }
