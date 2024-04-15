@@ -195,8 +195,8 @@ class GridTrading : public Strategy {
         }
     }
 
-    template <bool IsBid>
-    void PostLevels() {
+    template <bool IsBid, bool OnlyCancel>
+    bool PostLevels() {
         std::deque<Level>& bids = IsBid ? target_bids : target_asks;
         std::map<int, int> new_qty_by_px;
         for (size_t i = 0; i < std::min(static_cast<int>(bids.size()), max_levels); ++i) {
@@ -243,11 +243,15 @@ class GridTrading : public Strategy {
                 }
             } catch (const ServiceReply& reply) {
                 m_logger->warn("Could not cancel the order (possible execution). Break posting orders");
-                return;
+                return true;  // Signal to stop the iteration
             }
             if (CheckEventsPending("Cancel Orders")) {
-                return;
+                return true;  // Signal to stop the iteration
             }
+        }
+
+        if constexpr (OnlyCancel) {
+            return false;  // Continue iteration
         }
 
         // Place new orders
@@ -263,7 +267,7 @@ class GridTrading : public Strategy {
                         m_runner.PostOrder(px, place_qty, direction);
                     }
                 } catch (const ServiceReply& reply) {
-                    m_logger->warn("Could not post the order. Break posting orders");
+                    m_logger->error("Could not post the order. Break posting orders");
                     return true;  // Signal to stop the iteration
                 }
                 if (CheckEventsPending("Post Orders")) {
@@ -275,13 +279,15 @@ class GridTrading : public Strategy {
 
         if constexpr (IsBid) {
             for (const auto& pair : new_qty_by_px) {
-                if (postOrder(pair)) break;
+                if (postOrder(pair)) return true;  // Signal to stop the iteration
             }
         } else {
             for (auto it = new_qty_by_px.rbegin(); it != new_qty_by_px.rend(); ++it) {
-                if (postOrder(*it)) break;
+                if (postOrder(*it)) return true;  // Signal to stop the iteration
             }
         }
+
+        return false;  // Continue iteration
     }
 
     void PostOrders() {
@@ -295,15 +301,20 @@ class GridTrading : public Strategy {
         if (target_asks.empty()) {
             UpdateTargetQuotesOnPriceChange<true>();
         }
-        if (CheckEventsPending("PostOrders()")) {
+        // Cancel orders
+        if (PostLevels<true, true>()) {
+            return;
+        }
+        if (PostLevels<false, true>()) {
             return;
         }
         // Post orders
-        PostLevels<true>();
-        if (CheckEventsPending("PostOrders() between sides")) {
+        if (PostLevels<true, false>()) {
             return;
         }
-        PostLevels<false>();
+        if (PostLevels<false, false>()) {
+            return;
+        }
     }
 
     void OnConnectorsReadiness() override {
