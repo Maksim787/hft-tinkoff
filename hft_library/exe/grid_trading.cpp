@@ -332,7 +332,7 @@ class GridTrading : public Strategy {
     }
 
     void OnTradesUpdate() override {
-        m_logger->trace("OrderBook update.\tbid_px={}; ask_px={}. Trade: {}", m_order_book.bid.px[0], m_order_book.ask.px[0], m_trades);
+        m_logger->trace("OnTradesUpdate update.\tbid_px={}; ask_px={}. Trade: {}", m_order_book.bid.px[0], m_order_book.ask.px[0], m_trades);
         PostOrders();
     }
 

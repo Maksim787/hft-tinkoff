@@ -209,7 +209,10 @@ void UserConnector::ProcessOurTrade(const LockGuard& lock, const std::string& or
     } else {
         LimitOrder& order = it->second;
         // Do sanity check
-        assert(order.px == px && "Px mismatch");
+        if (order.px != px) {
+            m_logger->error("Order: {}. Price mismatch: px = {}", order, px);
+        }
+        // assert(order.px == px && "Px mismatch");
         assert(order.direction == direction && "Direction mismatch");
         assert(executed_qty <= order.qty && "More qty was executed than order contains");
         // Remove qty

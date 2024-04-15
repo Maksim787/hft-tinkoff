@@ -18,7 +18,6 @@ git submodule update --init --recursive
 # Make directories
 mkdir private
 mkdir log
-scp ~/HFT/hft-tinkoff/private/config.yaml hft@158.160.122.142:~/hft-tinkoff/private/
 
 # Swap
 sudo swapon --show
@@ -102,7 +101,7 @@ cd hft-tinkoff/
 mkdir build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Debug ..
-cmake --build .
+cmake --build . --target grid_trading
 
 # Remove unnecessary parts
 rm -rf temp/
@@ -114,7 +113,5 @@ tmux new -s hft
 python scripts/server/launch_server.py | tee -i -a log/launcher_logs.txt
 rm log/*
 
-scp hft@158.160.122.142:~/hft-tinkoff/log/log.txt ~/HFT/hft-tinkoff/server_logs/
-scp hft@158.160.122.142:~/hft-tinkoff/scripts/server/bot_logs.txt ~/HFT/hft-tinkoff/server_logs/
-scp hft@158.160.122.142:~/hft-tinkoff/scripts/server/strategy_logs.txt ~/HFT/hft-tinkoff/server_logs/
-scp hft@158.160.122.142:~/hft-tinkoff/scripts/server/launcher_logs.txt ~/HFT/hft-tinkoff/server_logs/
+scp ~/HFT/hft-tinkoff/private/config.yaml hft@158.160.122.142:~/hft-tinkoff/private/
+scp -r hft@158.160.122.142:~/hft-tinkoff/log/ ~/HFT/hft-tinkoff/
