@@ -131,10 +131,10 @@ const LimitOrder& UserConnector::PostOrder(int px, int qty, Direction direction)
     if (status == OrderExecutionReportStatus::EXECUTION_REPORT_STATUS_NEW) {
         return ProcessNewPostOrder(order_id, px, qty, direction);
     } else if (status == OrderExecutionReportStatus::EXECUTION_REPORT_STATUS_PARTIALLYFILL) {
-        // TODO: implement market execution
+        // TODO: implement market execution (it seems that this branch never happens)
         assert(false && "Not implemented");
     } else if (status == OrderExecutionReportStatus::EXECUTION_REPORT_STATUS_REJECTED) {
-        // TODO: process errors
+        // TODO: process errors (it seems that this branch never happens)
         assert(false && "Not implemented");
     } else {
         assert(false && "Unreachable");
@@ -152,10 +152,12 @@ void UserConnector::CancelOrder(const std::string& order_id) {
     ServiceReply reply = m_orders_service->CancelOrder(
         m_account_id,
         order_id);
-    // Remove the order anyway
+    // Check for errors
+    auto response = ParseReply<CancelOrderResponse>(reply, m_logger);
+
+    // Remove the order if no errors occured
     m_positions.orders.erase(it);
 
-    auto response = ParseReply<CancelOrderResponse>(reply, m_logger);
     // TODO: parse response->time()
     // Log Orders
     LogOrders();
@@ -204,7 +206,7 @@ void UserConnector::ProcessOurTrade(const LockGuard& lock, const std::string& or
     auto it = m_positions.orders.find(order_id);
     bool order_exists = (it != m_positions.orders.end());
     if (!order_exists) {
-        m_logger->info("Execution of the cancelled order");
+        m_logger->error("Execution of the cancelled order: {}", order_id);
         // TODO: add storage with cancelled and executed orders
     } else {
         LimitOrder& order = it->second;

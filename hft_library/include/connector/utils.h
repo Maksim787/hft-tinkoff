@@ -47,17 +47,22 @@ Type* ParseReply(ServiceReply& reply, std::shared_ptr<spdlog::logger> logger) {
     const auto& status = reply.GetStatus();
     if (!status.ok()) {
         // Get error code
-        std::string error_message = status.error_message();  // code
-        std::string error_details = status.error_details();  // error_message
+        std::string status_erorr_message = status.error_message();  // code
+        std::string status_error_details = status.error_details();  // empty
+        std::string reply_error_message = reply.GetErrorMessage();  // string description
         // Find the error
+        std::string error_definition;
         try {
-            auto it = ERROR_DEFINITION.find(std::stoi(error_message));
-            std::string description = it != ERROR_DEFINITION.end() ? it->second : "Unknown Error (add it to the dictionary)";
-            logger->warn("Error Code: {}; Our Description: {} Error Details: {}", error_message, description, error_details);
+            auto it = ERROR_DEFINITION.find(std::stoi(status_erorr_message));
+            error_definition = it != ERROR_DEFINITION.end() ? it->second : "Unknown Error";
         } catch (const std::invalid_argument& exc) {
-            logger->error("Error Code: {} Error Details: {}", error_message, error_details);
+            error_definition = "Unknown Error";
         }
-        // TODO:
+        if (error_definition == "Unknown Error") {
+            logger->error("status.error_message() = '{}'; status.error_details() = '{}'; reply.GetErrorMessage() = '{}'; error_definition = '{}'", status_erorr_message, status_error_details, reply_error_message, error_definition);
+        } else {
+            logger->warn("status.error_message() = '{}'; status.error_details() = '{}'; reply.GetErrorMessage() = '{}'; error_definition = '{}'", status_erorr_message, status_error_details, reply_error_message, error_definition);
+        }
         throw reply;
     }
     auto response = std::dynamic_pointer_cast<Type>(reply.ptr());
