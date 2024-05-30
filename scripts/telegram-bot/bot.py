@@ -316,8 +316,11 @@ order_id   = {order_id}
     async def positions_monitor(self):
         tinkoff_api_interval_seconds = config["telegram"]["tinkoff_api_interval_seconds"]
         while True:
+            now = datetime.datetime.now()
             await self.send_positions()
-            await asyncio.sleep(tinkoff_api_interval_seconds)
+            elapsed = (datetime.datetime.now() - now).total_seconds()
+            if tinkoff_api_interval_seconds > elapsed:
+                await asyncio.sleep(tinkoff_api_interval_seconds - elapsed)
 
     async def run_task(self):
         async with inv.AsyncClient(token=config["runner"]["token"]) as client:

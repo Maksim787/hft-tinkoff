@@ -30,7 +30,7 @@ class GridTrading : public Strategy {
         // log strategy parameters
         m_logger->info("spread = {}; order_size = {};  max_levels = {}; debug = {}", spread, order_size, max_levels, debug);
         // log first quotes header
-        m_first_quotes_logger->info("strategy_time,first_bid_px,first_bid_qty");
+        m_first_quotes_logger->info("strategy_time,first_bid_px,first_ask_px,first_bid_qty,first_ask_qty,max_bid_qty,max_ask_qty");
     }
 
    private:
@@ -94,6 +94,10 @@ class GridTrading : public Strategy {
         }
     }
 
+    void LogCurrentQuotes() {
+        m_first_quotes_logger->info("{},{},{},{},{},{},{}", current_time(), GetFirstPx<true>(), GetFirstPx<false>(), GetFirstQty<true>(), GetFirstQty<false>(), GetMaxPostQty<true>(), GetMaxPostQty<false>());
+    }
+
     // Quotes Updates
     void InitializeFirstQuotes() {
         // Calculate best_px
@@ -104,7 +108,7 @@ class GridTrading : public Strategy {
 
         // Log initial quotes
         m_logger->info("InitializeFirstQuotes: first_bid_px={}, fitst_bid_qty={}", m_first_bid_px, m_first_bid_qty);
-        m_first_quotes_logger->info("{},{},{}", current_time(), m_first_bid_px, m_first_bid_qty);
+        LogCurrentQuotes();
     }
 
     void UpdateFirstQuotesOnPriceChange() {
@@ -126,7 +130,7 @@ class GridTrading : public Strategy {
         }
         if (first_bid_px_old != m_first_bid_px) {
             m_logger->info("first_bid_px: {} -> {}", first_bid_px_old, m_first_bid_px);
-            m_first_quotes_logger->info("{},{},{}", current_time(), m_first_bid_px, m_first_bid_qty);
+            LogCurrentQuotes();
         }
     }
 
@@ -139,11 +143,12 @@ class GridTrading : public Strategy {
         if constexpr (IsBid) {
             // Update best bid qty
             m_first_bid_qty -= executed_qty;
-            if (m_first_bid_qty < 0) {
+            if (m_first_bid_qty <= 0) {
                 // Update best bid price if the whole level on bids was executed
                 m_first_bid_qty += order_size;
                 --m_first_bid_px;
             }
+            m_first_bid_qty = std::min(m_first_bid_qty, GetMaxPostQty<IsBid>());
         } else {
             // Update best bid qty
             m_first_bid_qty += executed_qty;
@@ -154,7 +159,7 @@ class GridTrading : public Strategy {
             }
         }
         m_logger->info("UpdateFirstQuotesOnExecution({}; executed_px={}; executed_qty={}): first_bid_px: {} -> {}; first_bid_qty: {} -> {}", (IsBid ? "bid" : "ask"), executed_px, executed_qty, first_bid_px_old, m_first_bid_px, first_bid_qty_old, m_first_bid_qty);
-        m_first_quotes_logger->info("{},{},{}", current_time(), m_first_bid_px, m_first_bid_qty);
+        LogCurrentQuotes();
         assert(m_first_bid_qty >= 0);
         assert(m_first_bid_qty <= order_size);
     }
