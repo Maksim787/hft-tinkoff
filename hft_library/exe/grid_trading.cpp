@@ -5,35 +5,18 @@
 #include "runner.h"
 #include "strategy.h"
 
-struct TargetQuotesValidator;
-
 class GridTrading : public Strategy {
    private:
-    int max_levels;
-    int order_size;
-    int spread;
-    bool debug;
+    // Parameters
+    const int max_levels;
+    const int order_size;
+    const int spread;
+    const bool debug;
 
-    struct Level {
-        int px;
-        int qty;
+    int m_first_bid_px;   // first_ask = first_bid_px + spread + (first_bid_qty == order_size)
+    int m_first_bid_qty;  // first_ask_qty = order_size - target_bid_qty + order_size * (first_bid_qty == order_size)
 
-        Level(int px, int qty) : px(px), qty(qty) {}
-    };
-
-    std::shared_ptr<spdlog::logger> m_target_bid_ask_logger;
-    std::deque<Level> target_bids;
-    std::deque<Level> target_asks;
-    int bids_asks_qty_sum = 0;
-
-    friend std::ostream& operator<<(std::ostream& out, const std::deque<Level>& target_quotes) {
-        // target_quote.size(),px_1,qty_1,...,px_n,qty_n
-        out << target_quotes.size();
-        for (const Level& level : target_quotes) {
-            out << ";" << level.px << ";" << level.qty;
-        }
-        return out;
-    }
+    std::shared_ptr<spdlog::logger> m_first_quotes_logger;
 
    public:
     explicit GridTrading(Runner& runner, const ConfigType& config)
@@ -42,12 +25,13 @@ class GridTrading : public Strategy {
           order_size(config["order_size"].as<int>()),
           spread(config["spread"].as<int>()),
           debug(config["debug"].as<bool>()),
-          m_target_bid_ask_logger(m_runner.GetLogger("target_bid_ask", true)) {
+          m_first_quotes_logger(m_runner.GetLogger("target_bid_ask", true)) {
         assert(spread >= 2);
+        // log strategy parameters
         m_logger->info("spread = {}; order_size = {};  max_levels = {}; debug = {}", spread, order_size, max_levels, debug);
-        m_target_bid_ask_logger->info("when,strategy_time,msg,bid_count;bid_px;bid_qty,ask_count;ask_px;ask_qty");
+        // log first quotes header
+        m_first_quotes_logger->info("when,strategy_time,msg,bid_count;bid_px;bid_qty,ask_count;ask_px;ask_qty");
     }
-    friend struct TargetQuotesValidator;
 
    private:
     // Utils
@@ -77,133 +61,123 @@ class GridTrading : public Strategy {
         return false;
     }
 
-    void ValidateTargetQuotes() {
-        // One of the arrays is not empty
-        assert(!target_bids.empty() || !target_asks.empty());
-
-        // 0 <= qty <= order_size
-        int curr_bids_asks_qty_sum = 0;
-        for (const Level& level : target_bids) {
-            assert(level.qty >= 0 && level.qty <= order_size);
-            curr_bids_asks_qty_sum += level.qty;
+    template <bool IsBid>
+    int GetFirstPx() const {
+        assert(0 <= m_first_bid_qty);
+        assert(m_first_bid_qty <= order_size);
+        if constexpr (IsBid) {
+            return m_first_bid_px;
+        } else {
+            return m_first_bid_px + spread + (m_first_bid_qty == order_size);
         }
+    }
 
-        // 0 <= qty <= order_size
-        int curr_target_asks_qty_sum = 0;
-        for (const Level& level : target_asks) {
-            assert(level.qty >= 0 && level.qty <= order_size);
-            curr_bids_asks_qty_sum += level.qty;
+    template <bool IsBid>
+    int GetFirstQty() const {
+        assert(0 <= m_first_bid_qty);
+        assert(m_first_bid_qty <= order_size);
+        if constexpr (IsBid) {
+            assert(m_first_bid_qty <= GetMaxPostQty<true>());
+            return m_first_bid_qty;
+        } else {
+            int first_ask_qty = order_size - m_first_bid_qty + order_size * (m_first_bid_qty == order_size);
+            return std::min(first_ask_qty, GetMaxPostQty<IsBid>());
         }
-        // sum is constant
-        assert(curr_bids_asks_qty_sum == bids_asks_qty_sum);
+    }
 
-        // Price step is 1
-        for (size_t i = 1; i < target_bids.size(); ++i) {
-            assert(target_bids[i].px == target_bids[i - 1].px - 1);
-        }
-        for (size_t i = 1; i < target_asks.size(); ++i) {
-            assert(target_asks[i].px == target_asks[i - 1].px + 1);
-        }
-
-        // spread is not more than (spread - 1)
-        if (!target_bids.empty() && !target_asks.empty()) {
-            assert(target_bids.front().px + spread - 1 <= target_asks.front().px);
+    template <bool IsBid>
+    int GetMaxPostQty() const {
+        if constexpr (IsBid) {
+            return m_positions.money / (m_order_book.bid.px[0] + 5);
+        } else {
+            return m_positions.qty;
         }
     }
 
     // Quotes Updates
-    template <bool IsBid>
-    void InitializeTargetQuotes(bool final_validate) {
-        const std::string msg = fmt::to_string(fmt::format("InitializeTargetQuotes({})", (IsBid ? "bid" : "ask")));
-        TargetQuotesValidator v(*this, msg, false, final_validate);
-        constexpr int sign = Sign<IsBid>();
-        int start_px = m_order_book.bid.px[0] - (spread - 1) / 2;
-        if constexpr (!IsBid) {
-            start_px += spread;
-        }
-        std::deque<Level>& bids = IsBid ? target_bids : target_asks;
-        // TODO: dynamically determine maximum qty
-        int max_post_qty = IsBid ? m_positions.money / m_order_book.bid.px[0] : m_positions.qty;
-        m_logger->info("{}: max_post_qty={}", msg, max_post_qty);
-        int curr_qty = 0;
-        for (int i = 0; i < max_post_qty; ++i) {
-            int new_qty = std::min(max_post_qty - curr_qty, order_size);
-            if (new_qty == 0) {
-                break;
-            }
-            bids.emplace_back(start_px - sign * i, new_qty);
-            curr_qty += new_qty;
-        }
-        bids_asks_qty_sum += max_post_qty;
+    void InitializeFirstQuotes() {
+        // Calculate best_px
+        m_first_bid_px = (m_order_book.bid.px[0] + m_order_book.ask.px[0]) / 2 - spread / 2;
+
+        // Calculate first qty
+        m_first_bid_qty = std::min(GetMaxPostQty<true>(), order_size);
+
+        // Log initial quotes
+        m_logger->info("InitializeFirstQuotes: first_bid_px={}, fitst_bid_qty={}", m_first_bid_px, m_first_bid_qty);
     }
 
-    template <bool IsBid>
-    void UpdateTargetQuotesOnPriceChange() {
-        const std::string msg = fmt::to_string(fmt::format("UpdateTargetQuotesOnPriceChange({})", (IsBid ? "bid" : "ask")));
-        TargetQuotesValidator v(*this, std::move(msg));
-        // We only have money -> increase the curr_bid_px
-        // bid = best_bid - spread
-        // We only have the asset -> decrease the curr_bid_px
-        // ask = best_ask + spread
-        constexpr int sign = Sign<IsBid>();
-        std::deque<Level>& bids = IsBid ? target_bids : target_asks;
-        assert(!bids.empty());
-        int target_bid_px = IsBid ? m_order_book.bid.px[0] - spread : m_order_book.ask.px[0] + spread;
-        int front_bid_px = bids.front().px;
-        if (front_bid_px * sign < target_bid_px * sign) {
-            for (Level& level : bids) {
-                level.px += (target_bid_px - front_bid_px);
-            }
+    void UpdateFirstQuotesOnPriceChange() {
+        int first_ask_qty = GetFirstQty<false>();
+        assert(m_first_bid_qty > 0 || first_ask_qty > 0);
+        int first_bid_px_old = m_first_bid_px;
+        if (m_first_bid_qty == 0) {
+            // No quotes on bid side
+            // We only have the asset -> decrease the m_first_bid_px
+            // ask = best_ask + spread
+            m_first_bid_px = std::min(m_first_bid_px, m_order_book.ask.px[0]);
+        } else if (first_ask_qty == 0) {
+            // No quotes on ask side
+            // We only have money -> increase the m_first_bid_px
+            // bid = best_bid - spread
+            m_first_bid_px = std::max(m_first_bid_px, m_order_book.bid.px[0] - spread);
+        } else {
+            // We have quotes on both sides
+        }
+        if (first_bid_px_old != m_first_bid_px) {
+            m_logger->info("first_bid_px: {} -> {}", first_bid_px_old, m_first_bid_px);
         }
     }
 
     template <bool IsBid>
-    void UpdateTargetQuotesOnExecution(int executed_px, int executed_qty) {
+    void UpdateFirstQuotesOnExecution(int executed_px, int executed_qty) {
         // IsBid = true -> executed_qty from bids
-        const std::string msg = fmt::to_string(fmt::format("UpdateTargetQuotesOnExecution({}; px={}; qty={})", (IsBid ? "bid" : "ask"), executed_px, executed_qty));
-        TargetQuotesValidator v(*this, msg);
-        std::deque<Level>& bids = IsBid ? target_bids : target_asks;
-        std::deque<Level>& asks = IsBid ? target_asks : target_bids;
-        constexpr int sign = Sign<IsBid>();
-        while (executed_qty > 0) {
-            assert(!bids.empty());
-            // Get executed bid
-            Level& bid_front = bids.front();
-            int bid_front_px = bid_front.px;
-            // Remove executed qty from this bid
-            int remove_qty = std::min(executed_qty, bid_front.qty);
-            bid_front.qty -= remove_qty;
-            executed_qty -= remove_qty;
-            // Remove empty bid
-            if (bid_front.qty == 0) {
-                bids.pop_front();
+        int first_bid_px_old = m_first_bid_px;
+        int first_bid_qty_old = m_first_bid_qty;
+
+        if constexpr (IsBid) {
+            // Update best bid qty
+            m_first_bid_qty -= executed_qty;
+            if (m_first_bid_qty < 0) {
+                // Update best bid price if the whole level on bids was executed
+                m_first_bid_qty += order_size;
+                --m_first_bid_px;
             }
-            if (asks.empty() || asks.front().qty == order_size) {
-                // Add new ask
-                asks.emplace_front(bid_front_px + sign * (spread - 1), remove_qty);
-            } else {
-                // Increase the current ask
-                Level& ask_front = asks.front();
-                int delta_qty = std::min(remove_qty, order_size - ask_front.qty);
-                ask_front.qty += delta_qty;
-                remove_qty -= delta_qty;
-                // Add new ask if needed
-                if (remove_qty != 0) {
-                    asks.emplace_front(ask_front.px - sign, remove_qty);
-                }
+        } else {
+            // Update best bid qty
+            m_first_bid_qty += executed_qty;
+            if (m_first_bid_qty > order_size) {
+                // Update best bid price if the whole level on asks was executed
+                m_first_bid_qty -= order_size;
+                ++m_first_bid_px;
             }
         }
+        m_logger->info("UpdateFirstQuotesOnExecution({}; executed_px={}; executed_qty={}): first_bid_px: {} -> {}; first_bid_qty: {} -> {}", (IsBid ? "bid" : "ask"), executed_px, executed_qty, first_bid_px_old, m_first_bid_px, first_bid_qty_old, m_first_bid_qty);
+        assert(m_first_bid_qty >= 0);
+        assert(m_first_bid_qty <= order_size);
     }
 
     template <bool IsBid, bool OnlyCancel>
     bool PostLevels() {
-        std::deque<Level>& bids = IsBid ? target_bids : target_asks;
+        // Calculate target quotes
         std::map<int, int> new_qty_by_px;
-        for (size_t i = 0; i < std::min(static_cast<int>(bids.size()), max_levels); ++i) {
-            const Level& level = bids[i];
-            assert(level.qty > 0);
-            new_qty_by_px[level.px] += level.qty;
+        int max_post_qty = GetMaxPostQty<IsBid>();
+        int sign = Sign<IsBid>();
+        int first_qty = GetFirstQty<IsBid>();
+        int first_px = GetFirstPx<IsBid>();
+        if (first_qty > 0) {
+            // First quote
+            new_qty_by_px[first_px] = first_qty;
+            assert(first_qty <= max_post_qty);
+            max_post_qty -= first_qty;
+            // Other quotes
+            for (int i = 1; (i < max_levels) && (max_post_qty > 0); ++i) {
+                int new_qty = std::min(order_size, max_post_qty);
+                new_qty_by_px[first_px - sign * i] = new_qty;
+                max_post_qty -= new_qty;
+            }
         }
+
+        // Calculate old quotes
         std::map<int, int> old_qty_by_px;
         for (const auto& [order_id, order] : m_positions.orders) {
             assert(order.qty > 0);
@@ -251,14 +225,14 @@ class GridTrading : public Strategy {
         }
 
         if constexpr (OnlyCancel) {
-            return false;  // Continue iteration
+            return false;  // Continue iteration to cancel orders from other side
         }
 
         // Place new orders
         auto postOrder = [this, &old_qty_by_px](const auto& pair) {
             Direction direction = IsBid ? Direction::Buy : Direction::Sell;
             const auto [px, qty] = pair;
-            int place_qty = qty - old_qty_by_px[px];
+            const int place_qty = qty - old_qty_by_px[px];
             assert(place_qty <= order_size);
             if (place_qty > 0) {
                 try {
@@ -294,13 +268,10 @@ class GridTrading : public Strategy {
         if (CheckEventsPending("PostOrders() start")) {
             return;
         }
-        // Update quotes on huge price change
-        if (target_bids.empty()) {
-            UpdateTargetQuotesOnPriceChange<false>();
-        }
-        if (target_asks.empty()) {
-            UpdateTargetQuotesOnPriceChange<true>();
-        }
+
+        // Update quotes on huge price change if necessary
+        UpdateFirstQuotesOnPriceChange();
+
         // Cancel orders
         if (PostLevels<true, true>()) {
             return;
@@ -308,6 +279,7 @@ class GridTrading : public Strategy {
         if (PostLevels<false, true>()) {
             return;
         }
+
         // Post orders
         if (PostLevels<true, false>()) {
             return;
@@ -320,30 +292,41 @@ class GridTrading : public Strategy {
     void OnConnectorsReadiness() override {
         m_logger->info("All connectors are ready");
         m_logger->info("OrderBook:\n{}\nTrades: {}\nPositions:\n{}", m_order_book, m_trades, m_positions);
-        InitializeTargetQuotes<true>(false);
-        InitializeTargetQuotes<false>(true);
+        // Initialize first quotes for bid/ask
+        InitializeFirstQuotes();
         // Post initial orders
         PostOrders();
     }
 
     void OnOrderBookUpdate() override {
-        m_logger->trace("OrderBook update.\tbid_px={}; ask_px={}", m_order_book.bid.px[0], m_order_book.ask.px[0]);
+        // Log event
+        m_logger->trace("OrderBook update.\tbid_px={}; ask_px={}; first_bid_px={}; first_bid_qty={}", m_order_book.bid.px[0], m_order_book.ask.px[0], m_first_bid_px, m_first_bid_qty);
+
+        // Handle event
         PostOrders();
     }
 
     void OnTradesUpdate() override {
-        m_logger->trace("OnTradesUpdate update.\tbid_px={}; ask_px={}. Trade: {}", m_order_book.bid.px[0], m_order_book.ask.px[0], m_trades);
+        // Log event
+        m_logger->trace("OnTradesUpdate update.\tbid_px={}; ask_px={}; first_bid_px={}; first_bid_qty={}. Trade: {}", m_order_book.bid.px[0], m_order_book.ask.px[0], m_first_bid_px, m_first_bid_qty, m_trades);
+
+        // Handle event
         PostOrders();
     }
 
     void OnOurTrade(const LimitOrder& order, int executed_qty) override {
-        m_logger->info("Execution: qty={} on order={}", executed_qty, order);
+        // Log event
+        m_logger->info("Execution: executed_qty={} on order={}", executed_qty, order);
         m_logger->info("money={}; qty={}; n_orders={}", m_positions.money, m_positions.qty, m_positions.orders.size());
+
+        // Update quotes
         if (order.direction == Direction::Buy) {
-            UpdateTargetQuotesOnExecution<true>(order.px, executed_qty);
+            UpdateFirstQuotesOnExecution<true>(order.px, executed_qty);
         } else {
-            UpdateTargetQuotesOnExecution<false>(order.px, executed_qty);
+            UpdateFirstQuotesOnExecution<false>(order.px, executed_qty);
         }
+
+        // Handdle event
         PostOrders();
     }
 };
@@ -364,23 +347,3 @@ int main() {
     std::cout << "Exit 0" << std::endl;
     return 0;
 }
-
-// Quotes Validator
-struct TargetQuotesValidator {
-    GridTrading& s;
-    std::string msg;
-    bool final_validate;
-    TargetQuotesValidator(GridTrading& s, std::string msg, bool initial_validate = true, bool final_validate = true)
-        : s(s), msg(std::move(msg)), final_validate(final_validate) {
-        s.m_target_bid_ask_logger->info("before,{},{},{},{}", current_time(), this->msg, s.target_bids, s.target_asks);
-        if (initial_validate) {
-            s.ValidateTargetQuotes();
-        }
-    }
-    ~TargetQuotesValidator() {
-        s.m_target_bid_ask_logger->info("after,{},{},{},{}", current_time(), this->msg, s.target_bids, s.target_asks);
-        if (final_validate) {
-            s.ValidateTargetQuotes();
-        }
-    }
-};

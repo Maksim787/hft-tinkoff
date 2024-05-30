@@ -51,7 +51,7 @@ void UserConnector::Start() {
     m_logger->info("Start UserConnector");
 
     // Get Initial Positions
-    m_logger->info("Get Positions and Subscribe Streams");
+    m_logger->info("Get Positions");
     auto operations = std::dynamic_pointer_cast<Operations>(m_client.service("operations"));
     ServiceReply positions_reply = operations->GetPositions(m_account_id);
     auto positions = ParseReply<PositionsResponse>(positions_reply, m_logger);
@@ -78,14 +78,14 @@ void UserConnector::Start() {
 
     // Parse Securities positions
     const auto& securities_positions = positions->securities();
-    assert(securities_positions.size() <= 1 && "Found multiple securities positions");
-    if (securities_positions.size() == 1) {
-        const PositionsSecurities& security_position = securities_positions[0];
-        assert(security_position.figi() == m_instrument.figi);
+    for (const PositionsSecurities& security_position : securities_positions) {
         assert(security_position.blocked() == 0 && "Cancel Sell orders!");
-        m_positions.qty = static_cast<int>(security_position.balance());
+        if (security_position.figi() == m_instrument.figi) {
+            m_positions.qty = static_cast<int>(security_position.balance());
+        }
     }
 
+    m_logger->info("Subscribe OrderStream");
     // Subscribe OrderStream
     m_orders_stream = std::dynamic_pointer_cast<OrdersStream>(m_client.service("ordersstream"));
     m_orders_stream->TradesStreamAsync(
