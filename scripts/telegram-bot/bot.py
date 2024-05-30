@@ -147,12 +147,13 @@ class TinkoffTask:
         def __init__(self, positions: inv.PositionsResponse, last_price: inv.MoneyValue):
             assert len(positions.money) <= 1
             assert len(positions.blocked) <= 1
-            assert len(positions.securities) <= 1
+            securities = [s for s in positions.securities if s.figi == config["runner"]["figi"]]
+            assert len(securities) <= 1
 
             self.money_balance = quotation_to_float(positions.money[0]) if positions.money else 0.0
             self.money_blocked = quotation_to_float(positions.blocked[0]) if positions.blocked else 0.0
-            if positions.securities:
-                security = positions.securities[0]
+            if securities:
+                security = securities[0]
                 self.qty_blocked = security.blocked
                 self.qty_balance = security.balance
             else:

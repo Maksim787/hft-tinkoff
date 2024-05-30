@@ -25,12 +25,12 @@ class GridTrading : public Strategy {
           order_size(config["order_size"].as<int>()),
           spread(config["spread"].as<int>()),
           debug(config["debug"].as<bool>()),
-          m_first_quotes_logger(m_runner.GetLogger("target_bid_ask", true)) {
+          m_first_quotes_logger(m_runner.GetLogger("first_bid_px_qty", true)) {
         assert(spread >= 2);
         // log strategy parameters
         m_logger->info("spread = {}; order_size = {};  max_levels = {}; debug = {}", spread, order_size, max_levels, debug);
         // log first quotes header
-        m_first_quotes_logger->info("when,strategy_time,msg,bid_count;bid_px;bid_qty,ask_count;ask_px;ask_qty");
+        m_first_quotes_logger->info("strategy_time,first_bid_px,first_bid_qty");
     }
 
    private:
@@ -104,6 +104,7 @@ class GridTrading : public Strategy {
 
         // Log initial quotes
         m_logger->info("InitializeFirstQuotes: first_bid_px={}, fitst_bid_qty={}", m_first_bid_px, m_first_bid_qty);
+        m_first_quotes_logger->info("{},{},{}", current_time(), m_first_bid_px, m_first_bid_qty);
     }
 
     void UpdateFirstQuotesOnPriceChange() {
@@ -125,6 +126,7 @@ class GridTrading : public Strategy {
         }
         if (first_bid_px_old != m_first_bid_px) {
             m_logger->info("first_bid_px: {} -> {}", first_bid_px_old, m_first_bid_px);
+            m_first_quotes_logger->info("{},{},{}", current_time(), m_first_bid_px, m_first_bid_qty);
         }
     }
 
@@ -152,6 +154,7 @@ class GridTrading : public Strategy {
             }
         }
         m_logger->info("UpdateFirstQuotesOnExecution({}; executed_px={}; executed_qty={}): first_bid_px: {} -> {}; first_bid_qty: {} -> {}", (IsBid ? "bid" : "ask"), executed_px, executed_qty, first_bid_px_old, m_first_bid_px, first_bid_qty_old, m_first_bid_qty);
+        m_first_quotes_logger->info("{},{},{}", current_time(), m_first_bid_px, m_first_bid_qty);
         assert(m_first_bid_qty >= 0);
         assert(m_first_bid_qty <= order_size);
     }

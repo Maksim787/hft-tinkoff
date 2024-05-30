@@ -5,11 +5,22 @@ sudo apt update
 sudo apt install fish -y
 sudo chsh -s $(which fish) hft
 
-# Git
-ssh-keygen -t rsa -b 4096
-scp ~/.ssh/id_rsa hft@158.160.122.142:~/.ssh/
-scp ~/.ssh/id_rsa.pub hft@158.160.122.142:~/.ssh/
+# Swap
+sudo apt install htop -y
+sudo swapon --show
+sudo fallocate -l 6G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+sudo swapon --show
+free -h
 
+# Git keys (on local machine)
+set IP 158.160.159.212
+scp ~/.ssh/id_rsa hft@{$IP}:~/.ssh/
+scp ~/.ssh/id_rsa.pub hft@{$IP}:~/.ssh/
+
+# Git
 sudo apt install git -y
 git clone git@github.com:Maksim787/hft-tinkoff.git
 cd hft-tinkoff
@@ -19,45 +30,53 @@ git submodule update --init --recursive
 mkdir private
 mkdir log
 
-# Swap
-sudo swapon --show
-sudo fallocate -l 6G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-sudo swapon --show
-free -h
+# Change cmake
+cd hft-tinkoff/
+vim hft_library/third_party/TinkoffInvestSDK/cmake/common.cmake
+set(GRPC_FETCHCONTENT false)
 
 # Install compilers
-sudo apt install cmake -y
 sudo apt install g++ -y
 sudo apt install build-essential libtool autoconf unzip wget -y
 sudo apt install libssl-dev -y
 
-version=3.28
-build=1
-mkdir ~/temp
-cd ~/temp
-wget https://cmake.org/files/v$version/cmake-$version.$build.tar.gz
-tar -xzvf cmake-$version.$build.tar.gz
-cd cmake-$version.$build/
-./bootstrap
-make -j$(nproc)
-sudo make install
+# Install latest cmake
+sudo apt update && \
+sudo apt install -y software-properties-common lsb-release && \
+sudo apt clean all
+wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | sudo tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
+bash
+sudo apt-add-repository "deb https://apt.kitware.com/ubuntu/ $(lsb_release -cs) main"
+sudo apt update
+sudo apt install kitware-archive-keyring
+sudo rm /etc/apt/trusted.gpg.d/kitware.gpg
+sudo apt update
+sudo apt install cmake -y
 
 # Python
 sudo apt install software-properties-common -y
 sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt-get update
 sudo apt install python3.10 -y
 sudo update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1
 sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
 sudo apt install python3-pip -y
-pip install -r hft-tinkoff/scripts/requirements.txt
+sudo apt-get install python3.10-distutils python3.10 python3.10-dev -y
+curl -sS https://bootstrap.pypa.io/get-pip.py | python3.10
+curl -sS https://bootstrap.pypa.io/get-pip.py | sudo python3.10
+pip install -r scripts/requirements.txt
 # or
 cat hft-tinkoff/scripts/requirements.txt | xargs -n 1 pip install
 
+# YAML
+sudo apt install libyaml-cpp-dev -y
+
+# spd-log
+sudo apt install libspdlog-dev -y
+
 # Install dependencies
 sudo apt install protobuf-compiler tmux htop -y
+cd ../
 
 # Protobuf
 # https://github.com/protocolbuffers/protobuf/blob/main/cmake/README.md
@@ -85,33 +104,26 @@ make -j 4
 sudo make install
 popd
 
-# YAML
-sudo apt install libyaml-cpp-dev -y
-
-# spd-log
-sudo apt install libspdlog-dev -y
-
-# Change cmake
-cd hft-tinkoff/
-vim hft_library/third_party/TinkoffInvestSDK/cmake/common.cmake
-set(GRPC_FETCHCONTENT false)
-
 # Build project
 cd hft-tinkoff/
 mkdir build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Debug ..
 cmake --build . --target grid_trading
+cd ../
 
 # Remove unnecessary parts
-rm -rf temp/
-rm -rf protobuf/
-rm -rf grpc/
+rm -rf ~/protobuf/
+rm -rf ~/grpc/
 
-
+# Launch server
 tmux new -s hft
 python scripts/server/launch_server.py | tee -i -a log/launcher_logs.txt
+
+# Remove old logs
 rm log/*
 
-scp ~/HFT/hft-tinkoff/private/config.yaml hft@158.160.122.142:~/hft-tinkoff/private/
-scp -r hft@158.160.122.142:~/hft-tinkoff/log/ ~/HFT/hft-tinkoff/
+# Copy logs from server to local
+set IP 158.160.159.212
+scp ~/HFT/hft-tinkoff/private/config.yaml hft@{$IP}:~/hft-tinkoff/private/
+scp -r hft@{$IP}:~/hft-tinkoff/log/ ~/HFT/hft-tinkoff/server_logs
