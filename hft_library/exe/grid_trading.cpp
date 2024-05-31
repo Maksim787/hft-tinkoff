@@ -88,7 +88,7 @@ class GridTrading : public Strategy {
     template <bool IsBid>
     int GetMaxPostQty() const {
         if constexpr (IsBid) {
-            return m_positions.money / (m_order_book.bid.px[0] + 5);
+            return m_positions.money / (m_order_book.bid.px[0] + 5) * (m_positions.money >= 0);
         } else {
             return m_positions.qty;
         }

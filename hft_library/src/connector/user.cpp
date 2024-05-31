@@ -63,7 +63,6 @@ void UserConnector::Start() {
         m_positions.money = 0;
     } else {
         m_positions.money = m_instrument.MoneyValueToPx(money_positions[0]);
-        assert(m_positions.money >= 0);
     }
 
     // Parse Money blocked positions
